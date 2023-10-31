@@ -1,0 +1,6 @@
+name	replicate	chip	filename	line_fit_filename	drop_last	reverse	sodium	notes
+r1	211022	Oct06	./data/fitted_variant/NNNlib2b_DNA_20211022_v6.CPvariant.gz	./data/fitted_variant/dG_fit_211022_v0.0.2.tsv	False	False	0.088	
+r2	211216	Nov11	./data/fitted_variant/NNNlib2b_DNA_20211216_v9.CPvariant.gz	./data/fitted_variant/dG_fit_211216_v0.0.2.tsv	False	False	0.088	
+r3	211221	Nov11	./data/fitted_variant/NNNlib2b_DNA_20211221_v9.CPvariant.gz	./data/fitted_variant/dG_fit_211221_v0.0.2.tsv	True	False	0.088	
+rev	211223	Nov11	./data/fitted_variant/NNNlib2b_DNA_20211223_v9.CPvariant.gz	./data/fitted_variant/dG_fit_211223_v0.0.2.tsv	False	True	0.088	reversed
+salt	220314	Nov11	./data/fitted_variant/NNNlib2b_DNA_20220314_v9.CPvariant.gz		False	False	0.163	

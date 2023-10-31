@@ -1,0 +1,32 @@
+name: nnn
+channels:
+  - conda-forge
+  - defaults
+dependencies:
+  - python=3.8
+  - pip
+  - jupyterlab
+  - numpy
+  - pandas
+  - matplotlib
+  - seaborn
+  - plotly
+  - scipy
+  - joblib
+  - biopython
+  - statsmodels
+  - lmfit
+  - pandarallel
+  - pytables
+  - scikit-learn
+  - umap-learn
+  - scanpy
+  - python-igraph
+  - leidenalg
+  - colorcet
+  - pip:
+    - tqdm
+    - scikits.bootstrap
+    - nwalign3
+    - python-louvain
+    - sympy

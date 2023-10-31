@@ -1,0 +1,17 @@
+__pycache__/
+.ipynb*
+.vscode/
+
+*_log.ipynb
+test.py
+
+wandb/
+models/
+fig/
+data/misc/
+data/wandb/
+data/processed/
+
+*.wav
+*.pdf
+*.gz
