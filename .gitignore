@@ -2,6 +2,7 @@ __pycache__/
 .ipynb*
 .vscode/
 
+03.2_TrainNN.ipynb
 *_log.ipynb
 test.py
 
@@ -15,3 +16,4 @@ data/processed/
 *.wav
 *.pdf
 *.gz
+*_metrics.json

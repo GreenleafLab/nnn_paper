@@ -8,10 +8,10 @@ from . import motif_fit as mf
 
 import wandb
 
-def model_pipeline(hyperparameters):
+def model_pipeline(hyperparameters, tags=None):
 
     # tell wandb to get started
-    with wandb.init(project="NN", config=hyperparameters):
+    with wandb.init(project="NN", config=hyperparameters, tags=tags):
         # access all HPs through wandb.config, so logging matches execution!
         config = wandb.config
         lr_dict = train(config)
