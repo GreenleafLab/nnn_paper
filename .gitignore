@@ -12,7 +12,7 @@ models/
 fig/
 data/misc/
 data/wandb/
-data/processed/
+data/processed/archive
 
 *.wav
 *.pdf
