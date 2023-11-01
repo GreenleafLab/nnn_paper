@@ -9,6 +9,7 @@ test.py
 
 wandb/
 models/
+!models/dna04.json
 fig/
 data/misc/
 data/wandb/

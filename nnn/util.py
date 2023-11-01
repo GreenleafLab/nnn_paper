@@ -125,7 +125,7 @@ def beutify(ax, x_locator=None, y_locator=None):
     sns.despine()
     matplotlib.rc('axes',edgecolor='k', linewidth=.5)
     ax.tick_params(colors='k', width=.5)
-    
+    ax.set_clip_on(False)
     if x_locator is not None:
         ax.xaxis.set_major_locator(MultipleLocator(x_locator))
     
