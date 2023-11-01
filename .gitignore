@@ -5,6 +5,7 @@ __pycache__/
 03.2_TrainNN.ipynb
 *_log.ipynb
 test.py
+*.sh
 
 wandb/
 models/
