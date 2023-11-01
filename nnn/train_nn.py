@@ -291,6 +291,7 @@ def test(config, lr_dict=None, json_file=None,
             metric_fn = wandb.run.name + '_metrics.json'
         except:
             metric_fn = 'some_test_run_metrics.json'
+        metric_fn = os.path.join('./models/', metric_fn)
             
         fileio.write_json(
             dict(
