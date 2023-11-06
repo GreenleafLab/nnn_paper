@@ -8,6 +8,7 @@ from matplotlib.ticker import (MultipleLocator, FormatStrFormatter,
                                AutoMinorLocator)
 from nnn import util, plotting, motif_fit
 
+matplotlib.rcParams['pdf.fonttype'] = 42
 PNAMES = ['dH', 'Tm', 'dG_37']
 
 def make_model_validation_df(val_data_df, **pred_kwargs):
@@ -198,6 +199,7 @@ def get_metric_dict(val_result_df, param):
     metric = defaultdict()
     
     val_result_df_no_nan = val_result_df.dropna(subset=[param+'_pred'])
+    val_result_df_no_nan = val_result_df_no_nan.loc[np.abs(val_result_df_no_nan[param+'_pred']) < 400]
     y = val_result_df_no_nan[param].values
     y_pred = val_result_df_no_nan[param+'_pred'].values
     bias = np.nanmean(y_pred) - np.nanmean(y)
@@ -238,19 +240,31 @@ def plot_validation_result_all_params(val_result_df, **kwargs):
     for i,pname in enumerate(PNAMES):
         plot_validation_result(val_result_df, param=pname, ax=ax[i], **kwargs)
         
-def plot_metric_bar(metric_dict, metric_name=None, ax=None):
+def plot_metric_bar(metric_dict, metric_name=None, metric_name_list=None, 
+                    abs_value=True, ax=None):
     if ax is None:
         _, ax = plt.subplots(figsize=(4.25,3.5))
-    if metric_name is None:
+    if metric_name is None and metric_name_list is None:
         "plot all metric"
         tmp = pd.DataFrame(data=metric_dict).reset_index(names='metric').melt(id_vars=['metric'])
-        sns.barplot(data=tmp, x='variable', y='value', hue='metric', ax=ax,
+        if abs_value:
+            tmp['value'] = np.abs(tmp['value'])
+        sns.barplot(data=tmp, hue='variable', y='value', x='metric', ax=ax,
                     width=.4, palette='viridis', edgecolor='k', linewidth=.5)
-    else:
+        
+    elif metric_name_list is not None:
+        tmp = pd.DataFrame(data=metric_dict).loc[metric_name_list,:].reset_index(names='metric').melt(id_vars=['metric'])
+        if abs_value:
+            tmp['value'] = np.abs(tmp['value'])
+        sns.barplot(data=tmp, hue='variable', y='value', x='metric', ax=ax,
+                    width=.4, palette='viridis', edgecolor='k', linewidth=.5)
+        
+    elif metric_name is not None:
         tmp_row = pd.DataFrame(data=metric_dict).loc[metric_name,:]
         ax.bar(x=tmp_row.index.tolist(), height=tmp_row.values,
                 width=.3, color=np.array([193,167,47])/256, edgecolor='k', linewidth=.5)
         # ax.set_xlim([-.5,1.5])
         ax.set_title(metric_name)
-    sns.despine()
-    ax.tick_params(colors='k', width=.5)
+    util.beutify(ax, y_locator=.2)
+    # sns.despine()
+    # ax.tick_params(colors='k', width=.5)

@@ -48,8 +48,8 @@ def plot_colored_scatter_comparison(data, x, y,
     if lim is None:
         # auto lim calculation
         margin = .5
-        ll = min(np.percentile(data[x].dropna(), 1), np.percentile(data[y].dropna(), 1))
-        ul = max(np.percentile(data[x].dropna(), 99), np.percentile(data[y].dropna(), 99))
+        ll = min(np.nanpercentile(data[x], 1), np.nanpercentile(data[y], 1))
+        ul = max(np.nanpercentile(data[x], 99), np.nanpercentile(data[y], 99))
         r = ul - ll
         lim = [ll - r * margin, ul + r * margin]
 

@@ -52,20 +52,28 @@ def get_stack_feature_list(row, stack_size=1):
     
     return loops_cleaned+stacks_cleaned
 
-def get_mismatch_stack_feature_list(row, stack_size=1):
+def get_mismatch_stack_feature_list(row, stack_size=1, fit_intercept=False, symmetry=False):
     """
     Assumes the mistmatch pair to be paired when extracting features
+    Stacks only
     """
     pad = min(stack_size - 1, 1)
     seq = 'x'*pad+row['RefSeq']+'y'*pad
-    struct = '('*pad + util.get_symmetric_struct(len(row.RefSeq), 4) + ')'*pad # has one more stack at the end
-    loops = LoopExtruder(seq, struct, neighbor_bps=stack_size-1)
+    struct = '('*pad + util.get_symmetric_struct(len(row['RefSeq']), 4) + ')'*pad # has one more stack at the end
+    # loops = LoopExtruder(seq, struct, neighbor_bps=stack_size-1)
     stacks = StackExtruder(seq, struct, stack_size=stack_size)
 
-    loops_cleaned = [x.split(',')[0].replace(' ','_') for x in loops]
+    # loops_cleaned = [x.split(',')[0].replace(' ','_') for x in loops]
     stacks_cleaned = [x.split(',')[0].replace(' ','_') for x in stacks]
+    if symmetry:
+        stacks_cleaned = [sort_stack(x) for x in stacks_cleaned]
 
-    return loops_cleaned + stacks_cleaned
+    # return loops_cleaned + stacks_cleaned
+    # return stacks_cleaned
+    if fit_intercept:
+        return stacks_cleaned + ['intercept']
+    else:
+        return stacks_cleaned
 
 
 def get_stack_feature_list_A(row, stack_size=1):
@@ -150,7 +158,7 @@ def get_feature_list(row, stack_size:int=2, sep_base_stack:bool=False, hairpin_m
     Args:
         loop_base_size - int, #stacks at the base of the loop to consider. Fixed to 1
         sep_base_stack - bool, whether to separate base stack of hairpin loops to save parameters
-        hairpin_mm - bool, if True, add hairpin mismatch parameters
+        hairpin_mm - bool, if True, add hairpin mismatch parameters. only use when `sep_base_stack = True`
         symmetry - bool, if set to True, view 2 symmetric motifs as the same
     """
     def clean(x):
@@ -427,3 +435,11 @@ def get_partial_position_feature_list(row, seq_type:str='hairpin_loop', **kwargs
         
     return feature_list
     
+    
+def get_rich_feature_list(row):
+    """
+    Rich feature list as in Zakov et al. 2011
+    """
+    feature_list = []
+    
+    return feature_list

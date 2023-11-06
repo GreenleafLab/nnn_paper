@@ -45,6 +45,7 @@ complement = {'A': 'T', 'C': 'G', 'G': 'C', 'T': 'A', '-':'-'}
 N_A = 6.023 * 1e23
 R = 0.00198717 # gas constant in kcal/mol not J
 kB = 1.380649*1e-23
+cm = 1/2.54
 
 ####################
 ##### Plotting #####
@@ -121,16 +122,38 @@ def beutify_all_ax(ax, **kwargs):
     for a in ax:
         beutify(a, **kwargs)
         
-def beutify(ax, x_locator=None, y_locator=None):
+def beutify(ax, x_locator=None, y_locator=None,
+            force_same_xy=False, add_margin=0,
+            shrink=False):
     sns.despine()
     matplotlib.rc('axes',edgecolor='k', linewidth=.5)
     ax.tick_params(colors='k', width=.5)
     ax.set_clip_on(False)
+    
+    if force_same_xy:
+        xlim, ylim = ax.get_xlim(), ax.get_ylim()
+        lim_min = min(xlim[0], ylim[0])
+        lim_max = max(xlim[1], ylim[1])
+        
+        if add_margin > 0:
+            lim_min -= (lim_max - lim_min) * add_margin
+            lim_max += (lim_max - lim_min) * add_margin
+            
+        new_lim = (lim_min, lim_max)
+        ax.set_xlim(new_lim)
+        ax.set_ylim(new_lim)
+        
     if x_locator is not None:
         ax.xaxis.set_major_locator(MultipleLocator(x_locator))
     
     if y_locator is not None:
         ax.yaxis.set_major_locator(MultipleLocator(y_locator))
+        
+    if shrink:
+        ax.figure.set_size_inches(4.5*cm, 3.25*cm)
+        ax.tick_params(axis='both', which='major', labelsize=5)
+        ax.xaxis.label.set_size(5)
+        ax.yaxis.label.set_size(5)
 
 #################
 #### General ####

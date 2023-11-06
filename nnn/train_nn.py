@@ -100,7 +100,8 @@ def train(config):
         feature_kwargs = dict(symmetry=config['symmetry'], 
                               sep_base_stack=True, 
                               hairpin_mm=False, 
-                              ignore_base_stack=False,)
+                              ignore_base_stack=False,
+                              stack_size=config['stack_size'])
     elif config['feature_method'] == 'get_nupack_feature_list':
         feature_style = 'nupack'
         feature_kwargs = dict(
@@ -282,7 +283,11 @@ def test(config, lr_dict=None, json_file=None,
         try:
             val_result_fn = wandb.run.name + '_val_result_df.csv'
         except:
-            val_result_fn = '_val_result_df.csv'
+            if json_file is not None:
+                val_result_fn = json_file.replace('.json', '_val_result_df.csv')
+            else:
+                val_result_fn = 'insert_name_here_val_result_df.csv'
+
         val_result_fn = os.path.join('./models/', val_result_fn)    
         val_result_df.to_csv(val_result_fn)
     

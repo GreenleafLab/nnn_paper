@@ -130,16 +130,16 @@ def get_feature_count_matrix(df, feature_method='get_stack_feature_list', featur
         # Remove features that every construct contains and is not intercept
         if feature_style == 'nupack':
             intercept_symbol = 'intercept#0'
+            intercept = feats.pop(intercept_symbol)
+            feats['intercept#intercept'] = intercept
         else:
-            intercept_symbol = 'INTERCEPT'
+            intercept_symbol = 'intercept'
             
         for k in feats.keys():
             if len(feats[k].unique())==1 and k!=intercept_symbol:
                 feats = feats.drop(columns=[k])
                 
-        if intercept_symbol in feats.columns:
-            intercept = feats.pop(intercept_symbol)
-            feats['intercept#intercept'] = intercept
+        # if intercept_symbol in feats.columns:
             
 
         return feats
@@ -419,7 +419,7 @@ def pred_variant(seq, struct, sodium=1.0, DNA_conc=None,
             else:
                 lnK = np.log(2/DNA_conc)
                 
-            pred_dict['Tm'] = pred_dict['dH'] / ((pred_dict['dH'] - pred_dict['dG']) / (273.15 + 37) - R * lnK)
+            pred_dict['Tm'] = pred_dict['dH'] / ((pred_dict['dH'] - pred_dict['dG']) / (273.15 + 37) - R * lnK) - 273.15
             return get_Na_adjusted_param(Na=sodium, from_Na=1.0, seq=seq[0], **pred_dict)
         else:
             pred_dict['Tm'] = get_Tm(pred_dict['dH'], pred_dict['dG'], celsius=37)
