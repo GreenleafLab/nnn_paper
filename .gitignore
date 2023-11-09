@@ -13,6 +13,7 @@ models/
 fig/
 data/misc/
 data/wandb/
+data/wandb_gnn/
 data/processed/archive
 !data/models
 

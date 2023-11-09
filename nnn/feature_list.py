@@ -436,10 +436,72 @@ def get_partial_position_feature_list(row, seq_type:str='hairpin_loop', **kwargs
     return feature_list
     
     
-def get_rich_feature_list(row):
+def get_rich_feature_list(row, position_context_templates:dict=None):
     """
+    TODO
     Rich feature list as in Zakov et al. 2011
+    Single out-of-range character `x`
+    Args:
+        position_context_templates: keys = ['single', 'double'] as in Table 8
     """
+    def clean(x):
+        cleaned = x.replace(' ','+').replace(',', '_')
+        return cleaned
+        
+    struct_element_dict = {} # keys: names of the structural element; values: tuple of refseq indices
     feature_list = []
+        
+    hp_pattern = re.compile(r'^\([.]+\)')
+    loop_base_size = 1
+    pad = 1#stack_size - 1
+    
+    refseq = row['RefSeq']
+    targetstruct = row['TargetStruct']
+    print(refseq, targetstruct)
+    if isinstance(refseq, list):
+        # Duplex
+        # Placeholder 'b' for strandbreak because RGV is stupid and have trouble
+        # handling multiple strands
+        seq = 'x'*pad + refseq[0] + 'x'*pad + 'b' + 'x'*pad + refseq[1] + 'x'*pad
+        struct = '('*pad + row['TargetStruct'].replace('+', '('*pad + '.' + ')'*pad) + ')'*pad
+        
+    elif isinstance(refseq, str):
+        # Hairpin
+        seq = 'x'*pad+refseq+'x'*pad
+        struct = '('*pad+row['TargetStruct']+')'*pad # has one more stack at the end
+    
+    loops = LoopExtruder(seq, struct, neighbor_bps=loop_base_size)
+    stacks = StackExtruder(seq, struct, stack_size=1)
+    stacks_nn = StackExtruder(seq, struct, stack_size=2)
+    loops_cleaned = [clean(x) for x in loops if not ('b' in x)] # remove anything with strand break
+    stacks_cleaned = [clean(x) for x in stacks] 
+    stacks_nn_cleaned = [clean(x) for x in stacks_nn]
+    
+    for loop in loops_cleaned:
+        seq, struct = loop.split('_')
+        if hp_pattern.match(struct):
+            # hairpin loop
+            # there are at most 1 hairpin loop in array dataset therefore this will work
+            loop_ind = targetstruct.find(struct)
+            loop_len = len(seq) - 2
+            if loop_len <= 4:
+                struct_element_dict['%d-HP-CLOSE'%loop_len] = (loop_ind, loop_ind + loop_len + 1)
+            elif loop_len > 4:
+                struct_element_dict['LONG-HP-CLOSE'] = (loop_ind, loop_ind + loop_len + 1)
+            
+                
+            # hairpin loop
+            hairpin_loop = LoopExtruder(seq, struct, neighbor_bps=0)[0]
+            hairpin_stack = StackExtruder(seq, struct, stack_size=1)[0]
+            
+            if len(seq) <= 6:
+                loops_cleaned.append(clean(hairpin_loop))
+            else:
+                loops_cleaned.append('NNNNN_.....')
+                            
+    
+    return loops_cleaned, stacks_cleaned, stacks_nn_cleaned
+    
+    feature_list = loops_cleaned + stacks_cleaned + stacks_nn_cleaned
     
     return feature_list

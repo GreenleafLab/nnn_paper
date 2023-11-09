@@ -6,6 +6,29 @@ import pickle
 
 from . import util
 
+def to_csv(df, path):
+    """
+    https://stackoverflow.com/questions/50047237/how-to-preserve-dtypes-of-dataframes-when-using-to-csv
+    """
+    # Prepend dtypes to the top of df
+    df2 = df.copy()
+    df2.loc[-1] = df2.dtypes
+    df2.index = df2.index + 1
+    df2.sort_index(inplace=True)
+    # Then save it to a csv
+    df2.to_csv(path, index=False)
+
+def read_csv(path):
+    # Read types first line of csv
+    dtypes = {key:value for (key,value) in pd.read_csv(path,    
+              nrows=1).iloc[0].to_dict().items() if 'date' not in value}
+
+    parse_dates = [key for (key,value) in pd.read_csv(path, 
+                   nrows=1).iloc[0].to_dict().items() if 'date' in value]
+    # Read the rest of the lines with the types from above
+    return pd.read_csv(path, dtype=dtypes, parse_dates=parse_dates, skiprows=[1])
+
+
 def read_santalucia_df(santalucia_file):
     santa_lucia = pd.read_csv(santalucia_file, sep='\t')
     santa_lucia['motif'] = santa_lucia['motif_paper'].apply(util.convert_santalucia_motif_representation)
@@ -177,36 +200,73 @@ def read_Oliveira_df(csv_file):
     
     return center_df.set_index('SEQID')[['a', 'b', 'center', 'sodium', 'DNA_conc', 'RefSeq', 'TargetStruct', 'Tm']]
     
+def clean_uv_df(uv_df, ecl_oligo_df, annotation):
+    def fill_hp_struct(row):
+        if not isinstance(row['TargetStruct'], str):
+            return util.get_symmetric_struct(len(row['RefSeq']), len_loop=4)
+        else:
+            return row['TargetStruct']
+
+    uv_df = uv_df.join(ecl_oligo_df[['sequence']]).join(annotation[['RefSeq', 'TargetStruct']])
+
+    uv_df['RefSeq'].fillna(uv_df['sequence'], inplace=True)
+    uv_df.drop(columns=['sequence'], inplace=True)
+
+    uv_df = uv_df[['Na_mM', 'conc_uM', 'RefSeq', 'TargetStruct', 'dH', 'Tm', 'dG_37', 'dS']]
+    uv_df['TargetStruct'] = uv_df.apply(fill_hp_struct, axis=1)
+
+    uv_agg_df = uv_df.reset_index(names=['SEQID']).groupby(['SEQID', 'Na_mM', 'conc_uM']).apply(np.mean)
+    uv_agg_df = uv_agg_df.drop(columns=['Na_mM', 'conc_uM']).reset_index().set_index('SEQID').join(uv_df[['RefSeq', 'TargetStruct']])
+    uv_agg_df = uv_agg_df.drop_duplicates()
+    uv_agg_df = uv_agg_df.rename(columns=dict(Na_mM='sodium', conc_uM='DNA_conc'))
+    uv_agg_df.sodium *= 1e-3
+    uv_agg_df.DNA_conc *= 1e-6
+    return uv_agg_df
     
 def read_val_df(split='val', datadir='./data'):
     """
     Params:
-        split - str, {'val', 'test'}
+        split - str, {'train', 'val', 'test'}
     """
     join_path = lambda x: os.path.join(datadir, x)
     
-    arr_df = pd.read_csv(join_path('models/processed/arr_v1_1M_n=27732.csv'), index_col=0)
-    uv_df = pd.read_csv(join_path('models/raw/uv.csv'), index_col=0) # All validation no test
+    arr_df = pd.read_csv(join_path('models/processed/arr_v1_adjusted_n=27732.csv'), index_col=0)
+    uv_df = pd.read_csv(join_path('models/raw/uv_n=96.csv'), index_col=0) # All validation no test
     center_df = read_Oliveira_df(join_path('literature/Oliveira_2020_mismatches.csv'))
     oligos348_df = pd.read_csv(join_path('literature/compiled_DNA_Tm_348oligos.csv'), index_col=0)
     
     arr_split_dict = read_json(join_path('models/raw/data_split.json'))
-    uv_split_dict = dict(val_ind=uv_df.index, test_ind=[])
+    uv_split_dict = read_json(join_path('models/raw/data_split_uv.json'))
     center_split_dict = read_json(join_path('models/raw/data_split_Oliveira.json'))
     oligo_split_dict = read_json(join_path('models/raw/data_split_348oligos.json'))
     
-    arr_df['sodium'] = 1.0
-    uv_df['sodium'] = 0.088
+    arr_df['sodium'] = 0.088
     
-    val_df = pd.concat(
-        (arr_df.loc[arr_split_dict[split+'_ind']],
-         uv_df.loc[uv_split_dict[split+'_ind']],
-         center_df.loc[center_split_dict[split+'_ind']],
-         oligos348_df.loc[oligo_split_dict[split+'_ind']],
-        ),
-        keys=['arr', 'uv', 'Oliveira', 'oligos348'],
-        names=['dataset', 'SEQID'],
-        axis=0
-    )
+    if split == 'all':
+        val_df = pd.concat(
+            (arr_df,
+            uv_df,
+            center_df,
+            oligos348_df,
+            ),
+            keys=['arr', 'uv', 'ov', 'lit_uv'],
+            names=['dataset', 'SEQID'],
+            axis=0
+        )
+        split_dict_list = [arr_split_dict, uv_split_dict, center_split_dict, oligo_split_dict]
+        combined_split_dict = {key+'_ind': sum([mydict[key+'_ind'] for mydict in split_dict_list], [])
+                               for key in ('train', 'val', 'test')}
+        return val_df[['RefSeq', 'TargetStruct', 'sodium', 'DNA_conc', 'dH', 'Tm', 'dG_37']], combined_split_dict
+    else:
+        val_df = pd.concat(
+            (arr_df.loc[arr_split_dict[split+'_ind']],
+            uv_df.loc[uv_split_dict[split+'_ind']],
+            center_df.loc[center_split_dict[split+'_ind']],
+            oligos348_df.loc[oligo_split_dict[split+'_ind']],
+            ),
+            keys=['arr', 'uv', 'ov', 'lit_uv'],
+            names=['dataset', 'SEQID'],
+            axis=0
+        )
     
-    return val_df[['RefSeq', 'TargetStruct', 'sodium', 'DNA_conc', 'dH', 'Tm', 'dG_37']]
+        return val_df[['RefSeq', 'TargetStruct', 'sodium', 'DNA_conc', 'dH', 'Tm', 'dG_37']]

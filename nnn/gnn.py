@@ -42,8 +42,18 @@ def dotbracket2edgelist(dotbracket_str:str,
 
     # Backbone edges
     N = len(dotbracket_str)
-    edge_5p_list = [[i, i+1] for i in range(N-1)]
-
+    strand_break_ind = dotbracket_str.find('+')
+        
+    if strand_break_ind == -1:
+        # hairpin
+        edge_5p_list = [[i, i+1] for i in range(N-1)]
+    else:
+        # duplex
+        dotbracket_str = dotbracket_str.replace('+', '')
+        N -= 1
+        edge_5p_list = [[i, i+1] for i in range(N-1) if \
+                       (i != strand_break_ind - 1) and (i+1 != strand_break_ind)]
+        
     # Hydrogen bonds
     edge_hbond_list = []
     flag3p = N - 1
@@ -70,6 +80,10 @@ def dotbracket2edgelist(dotbracket_str:str,
 
 
 def onehot_nucleotide(seq_str):
+    """
+    row['RefSeq'] is a list of 2 str for duplex but has to be joined into
+    a single string as input to this function
+    """
     map_dict = dict(A=0, T=1, C=2, G=3)
     N = len(seq_str)
     encode_arr = np.zeros((N, 4))
@@ -77,24 +91,57 @@ def onehot_nucleotide(seq_str):
         encode_arr[i, map_dict[x]] = 1
     return encode_arr
 
-def norm_dH(dH):
-    return (dH + 26) / 10
+def norm_p(p, pname, sumstats_dict, method='normalize'):
+    if len(sumstats_dict) == 0:
+        return p
+    
+    if method == 'standardize':
+        return (p - sumstats_dict[pname+'_mean']) / sumstats_dict[pname+'_std']
+    elif method == 'normalize':
+        return (p - sumstats_dict[pname+'_min']) / (sumstats_dict[pname+'_max'] - sumstats_dict[pname+'_min'])
+    
 
-def unorm_dH(dH_norm):
-    return dH_norm * 10 - 26
+def unorm_p(p, pname, sumstats_dict, method='normalize'):
+    if len(sumstats_dict) == 0:
+        return p
+    
+    if method == 'standardize':
+        return p * sumstats_dict[pname+'_std'] + sumstats_dict[pname+'_mean']
+    elif method == 'normalize':
+        return p * (sumstats_dict[pname+'_max'] - sumstats_dict[pname+'_min']) + sumstats_dict[pname+'_min']
 
-def norm_Tm(Tm):
-    return (Tm - 40) / 7
+def calc_sumstats(df):
+    sumstats_dict = dict(
+        dH_mean = np.nanmean(df.dH),
+        dH_std = np.nanstd(df.dH),
+        dH_min = np.nanmin(df.dH),
+        dH_max = np.nanmax(df.dH),
+        Tm_mean = np.nanmean(df.Tm),
+        Tm_std = np.nanstd(df.Tm),
+        Tm_min = np.nanmin(df.Tm),
+        Tm_max = np.nanmax(df.Tm)
+    )
+    return sumstats_dict    
 
-def unorm_Tm(Tm_norm):
-    return Tm_norm * 7 + 40
-
-def row2graphdata(row):
+def row2graphdata(row, sumstats_dict=None, method='normalize', y_type='dH_Tm'):
     edge_list, edge_feat = dotbracket2edgelist(row['TargetStruct'])
     edge_index = torch.tensor(np.array(edge_list).T, dtype=torch.long) #int64
     edge_attr = torch.tensor(edge_feat, dtype=torch.float)
-    x = torch.tensor(onehot_nucleotide(row['RefSeq']), dtype=torch.float)
-    y = torch.tensor([norm_dH(row['dH']), norm_Tm(row['Tm'])], dtype=torch.float)
+    refseq = row['RefSeq']
+    if isinstance(refseq, list):
+        refseq = ''.join(refseq)
+    x = torch.tensor(onehot_nucleotide(refseq), dtype=torch.float)
+    
+    if method is not None:
+        # actually normalize y
+        norm_fun = lambda p, pname: norm_p(p, pname, sumstats_dict, method=method)
+    
+    if y_type == 'dH_Tm':
+        y = torch.tensor([norm_fun(row['dH'], 'dH'), 
+                        norm_fun(row['Tm'], 'Tm')], dtype=torch.float)
+    elif y_type == 'curve':
+        # hard-coded, last 2 columns are refseq and targetstruct
+        y = torch.tensor(row.values[:-2].astype(float), dtype=torch.float)
 
     data = Data(x=x, edge_index=edge_index, edge_attr=edge_attr, y=y)
     return data
@@ -102,6 +149,9 @@ def row2graphdata(row):
 assert np.allclose(onehot_nucleotide('AT'), np.array([[1, 0, 0, 0], [0, 1, 0, 0]]))
 
 class NNNDataset(InMemoryDataset):
+    """
+    Abstract class
+    """
     def __init__(self, root, transform=None, pre_transform=None, pre_filter=None):
         super().__init__(root, transform, pre_transform, pre_filter)
         self.data, self.slices = torch.load(self.processed_paths[0])
@@ -111,6 +161,7 @@ class NNNDataset(InMemoryDataset):
 
         self.arr = pd.read_csv(os.path.join(self.raw_dir, self.raw_file_names[0]), index_col=0)
         self.seqid = self.arr.index
+        self.sumstats_dict = dict()
 
     @property
     def raw_file_names(self):
@@ -138,6 +189,16 @@ class NNNDataset(InMemoryDataset):
                               self.data_split_dict['test_ind'])
         return self.index_select(ind)
 
+    def process_data_list(self, data_list):
+        if self.pre_filter is not None:
+            data_list = [data for data in data_list if self.pre_filter(data)]
+
+        if self.pre_transform is not None:
+            data_list = [self.pre_transform(data) for data in data_list]
+
+        data, slices = self.collate(data_list)
+        torch.save((data, slices), self.processed_paths[0])
+        
     def process(self):
         print(self.raw_dir)
         self.arr = pd.read_csv(os.path.join(self.raw_dir, self.raw_file_names[0]), index_col=0)
@@ -152,11 +213,104 @@ class NNNDataset(InMemoryDataset):
         data, slices = self.collate(data_list)
         torch.save((data, slices), self.processed_paths[0])
 
-class NNNDatasetCorrected(NNNDataset):
+class NNNDatasetdHTmV0(NNNDataset):
+    def __init__(self, root, transform=None, pre_transform=None, pre_filter=None):
+        super().__init__(root, transform, pre_transform, pre_filter)
+        self.sumstats_dict = calc_sumstats(self.arr)
+
+    @property
+    def raw_file_names(self):
+        return ['arr.csv', 'train_val_test_split.json']
+
+    @property
+    def processed_file_names(self):
+        return ['data_v0.pt']
+
+    def process(self):
+        self.arr = pd.read_csv(os.path.join(self.raw_dir, self.raw_file_names[0]), index_col=0)
+        self.sumstats_dict = calc_sumstats(self.arr.loc[self.data_split_dict['train_ind']])
+        data_list = [row2graphdata(row, self.sumstats_dict, method='normalize') for _,row in self.arr.iterrows()]
+        super().process_data_list(data_list)
+
+
+class NNNDatasetdHTmCorrected(NNNDatasetdHTmV0):
     @property
     def raw_file_names(self):
         return ['arr_corrected_inplace.csv', 'train_val_test_split.json']
+
+class NNNDatasetdHTmV1(NNNDatasetdHTmV0):
+    """
+    Predict fitted dH and Tm parameters
+    Latest version
+    """
+    # def __init__(self, root, transform=None, pre_transform=None, pre_filter=None):
+    #     super().__init__(root, transform, pre_transform, pre_filter)
+    #     self.sumstats_dict = calc_sumstats(self.arr)
+        
+    @property
+    def raw_file_names(self):
+        return ['arr_v1_n=27732.csv', 'data_split.json']
     
+    @property
+    def processed_file_names(self):
+        return ['data_v1.pt']
+    
+
+""" p_unfold response variable"""    
+class NNNCurveDataset(NNNDataset):
+    def __init__(self, root, transform=None, pre_transform=None, pre_filter=None):
+        super().__init__(root, transform, pre_transform, pre_filter)
+    
+    @property
+    def raw_file_names(self):
+        return ['arr_p_unfold_n=30924.csv', 'data_split_p_unfold.json']
+    
+    @property
+    def processed_file_names(self):
+        return ['data_curve_v1.pt']
+    
+    def process(self):
+        # No normalization as p_unfold is already normalized
+        self.arr = pd.read_csv(os.path.join(self.raw_dir, self.raw_file_names[0]), index_col=0)
+        data_list = [row2graphdata(row, method=None, y_type='curve') 
+                        for _,row in self.arr.iterrows()]
+        super().process_data_list(data_list)
+
+
+class NNNDatasetWithDuplex(NNNDataset):
+    def __init__(self, root, transform=None, pre_transform=None, pre_filter=None):
+        super().__init__(root, transform, pre_transform, pre_filter)
+        self.seqid = self.arr['SEQID']
+        
+    @property
+    def raw_file_names(self):
+        return ['combined_dataset.csv', 'combined_data_split.json']
+    
+    @property
+    def processed_file_names(self):
+        return ['combined_data_v0.pt']
+        
+    def process(self):
+        def format_refseq(refseq):
+            if isinstance(refseq, str) and '[' in refseq:
+                return eval(refseq)
+            else:
+                return refseq
+                
+        print('processing', self.raw_dir)
+        self.arr = pd.read_csv(os.path.join(self.raw_dir, self.raw_file_names[0]))
+        self.arr.RefSeq = self.arr.RefSeq.apply(format_refseq)
+        data_list = [row2graphdata(row) for _,row in self.arr.iterrows()]
+
+        if self.pre_filter is not None:
+            data_list = [data for data in data_list if self.pre_filter(data)]
+
+        if self.pre_transform is not None:
+            data_list = [self.pre_transform(data) for data in data_list]
+
+        data, slices = self.collate(data_list)
+        torch.save((data, slices), self.processed_paths[0])
+        
 
 def sweep_model():
     with wandb.init() as run:
@@ -193,21 +347,32 @@ def model_pipeline(hyperparameters):
 def make(config):
     # Make the data
     torch.manual_seed(12345)
+    root = '/mnt/d/data/nnn/'
+    kwargs = dict(root=root)
     if config['dataset'] == 'NNN_v0':
-        dataset = NNNDataset(root='/mnt/d/data/nnn/')
+        dataset = NNNDatasetdHTmV0(**kwargs)
     elif config['dataset'] == 'NNN_v0.1':
-        dataset = NNNDatasetCorrected(root='/mnt/d/data/nnn/')
+        dataset = NNNDatasetdHTmCorrected(**kwargs)
+    elif config['dataset'] == 'NNN_v1':
+        dataset = NNNDatasetdHTmV1(**kwargs)
+    elif config['dataset'] == 'NNN_curve_v1':
+        dataset = NNNCurveDataset(**kwargs)
+    elif config['dataset'] == 'NNN_v2':
+        dataset = NNNDatasetWithDuplex(root='/mnt/d/data/nnn/')
+    else:
+        raise ValueError(config['dataset'])
+        
     has_gpu = torch.cuda.is_available()
     train_loader = DataLoader(dataset.train_set, batch_size=config['batch_size'],
                             shuffle=True, pin_memory=has_gpu)
     test_loader = DataLoader(getattr(dataset, config['mode']+'_set'), batch_size=config['batch_size'],
                             shuffle=False, pin_memory=has_gpu)
-
+    train_loader.sumstats_dict = dataset.sumstats_dict
+    test_loader.sumstats_dict = dataset.sumstats_dict
+    
     # Make the model
     if config['architecture'] == 'GraphTransformer':
         model = GTransformer(config).to(device)
-    # elif config['architecture'] == 'GAT':
-    #     model = GAT(config['hidden_channels']).to(device)
     else:
         raise 'Check `architecture` in config dictionary!'
 
@@ -227,6 +392,12 @@ class GTransformer(torch.nn.Module):
         num_edge_features = 3
         num_params = 2
         num_heads = 1
+        
+        if config['dataset'] == 'NNN_curve_v1':
+            dim_pred = 17
+        else:
+            dim_pred = 2
+            
         self.graphconv_dropout = config['graphconv_dropout']
         self.linear_dropout = config['linear_dropout']
 
@@ -331,9 +502,9 @@ def get_loss(loader, model):
     return np.sqrt(rmse / len(loader.dataset))  # Derive ratio of correct predictions.
 
 
-def unorm(arr):
-    arr[:,0] = unorm_dH(arr[:,0]) 
-    arr[:,1] = unorm_Tm(arr[:,1])
+def unorm(arr, sumstats_dict):
+    arr[:,0] = unorm_p(arr[:,0], 'dH', sumstats_dict) 
+    arr[:,1] = unorm_p(arr[:,1], 'Tm', sumstats_dict)
     return arr
 
 
@@ -357,10 +528,13 @@ def get_truth_pred(loader, model):
         out = model_pred(model, data)
         pred = np.concatenate((pred, out), axis=0)
 
-    y = unorm(y)
-    pred = unorm(pred)
+    if hasattr(loader, 'sumstats_dict'):
+        if len(loader.sumstats_dict) > 0:
+            y = unorm(y, loader.sumstats_dict)
+            pred = unorm(pred, loader.sumstats_dict)
 
     return dict(y=y, pred=pred)
+    
 
 def plot_truth_pred(result, ax, param='dH', title='Train'):
     color_dict = dict(dH='c', Tm='cornflowerblue', dG_37='teal', dS='steelblue')
