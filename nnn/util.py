@@ -204,6 +204,13 @@ def get_index_isinlist(df, mylist):
 ######################            
 #### NNN specific ####
 ######################
+    
+def format_refseq(refseq):
+    if isinstance(refseq, str) and '[' in refseq:
+        return eval(refseq)
+    else:
+        return refseq
+        
             
 def convert_santalucia_motif_representation(motif):
     strand = motif.split('_')
