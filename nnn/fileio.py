@@ -225,13 +225,14 @@ def clean_uv_df(uv_df, ecl_oligo_df, annotation):
     
 def read_val_df(split='val', datadir='./data'):
     """
+    Combine datasets. Use adjusted array data at low salt concentration.
     Params:
         split - str, {'train', 'val', 'test'}
     """
     join_path = lambda x: os.path.join(datadir, x)
     
     arr_df = pd.read_csv(join_path('models/processed/arr_v1_adjusted_n=27732.csv'), index_col=0)
-    uv_df = pd.read_csv(join_path('models/raw/uv_n=96.csv'), index_col=0) # All validation no test
+    uv_df = pd.read_csv(join_path('models/raw/uv_n=12.csv'), index_col=0) # All validation no test
     center_df = read_Oliveira_df(join_path('literature/Oliveira_2020_mismatches.csv'))
     oligos348_df = pd.read_csv(join_path('literature/compiled_DNA_Tm_348oligos.csv'), index_col=0)
     
@@ -270,3 +271,9 @@ def read_val_df(split='val', datadir='./data'):
         )
     
         return val_df[['RefSeq', 'TargetStruct', 'sodium', 'DNA_conc', 'dH', 'Tm', 'dG_37']]
+        
+def load_val_df(filename):
+    df = pd.read_csv(filename).set_index('SEQID')
+    df = df.sort_index()
+    df.RefSeq = df.RefSeq.apply(util.format_refseq)
+    return df

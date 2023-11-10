@@ -21,3 +21,4 @@ data/processed/archive
 *.pdf
 *.gz
 *_metrics.json
+data/models/raw/uv_n=96.csv
