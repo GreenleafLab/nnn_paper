@@ -273,7 +273,15 @@ def read_val_df(split='val', datadir='./data'):
         return val_df[['RefSeq', 'TargetStruct', 'sodium', 'DNA_conc', 'dH', 'Tm', 'dG_37']]
         
 def load_val_df(filename):
+    def gnn_format_refseq(x):
+        if isinstance(x, list):
+            return ''.join(x)
+        elif '[' in x:
+            return ''.join(eval(x))
+        else:
+            return x
+            
     df = pd.read_csv(filename).set_index('SEQID')
     df = df.sort_index()
-    df.RefSeq = df.RefSeq.apply(util.format_refseq)
+    df.RefSeq = df.RefSeq.apply(gnn_format_refseq)
     return df

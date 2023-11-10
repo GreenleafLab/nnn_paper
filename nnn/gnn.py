@@ -1,6 +1,7 @@
 
 """
 Define the training pipeline
+Do not import from `nnn` as those use a different environment
 """
 import os
 import torch
@@ -127,9 +128,13 @@ def row2graphdata(row, sumstats_dict=None, method='normalize', y_type='dH_Tm'):
     edge_list, edge_feat = dotbracket2edgelist(row['TargetStruct'])
     edge_index = torch.tensor(np.array(edge_list).T, dtype=torch.long) #int64
     edge_attr = torch.tensor(edge_feat, dtype=torch.float)
+    
     refseq = row['RefSeq']
     if isinstance(refseq, list):
         refseq = ''.join(refseq)
+    elif '[' in refseq:
+        refseq = ''.join(eval(refseq))
+        
     x = torch.tensor(onehot_nucleotide(refseq), dtype=torch.float)
     
     if method is not None:
@@ -161,7 +166,8 @@ class NNNDataset(InMemoryDataset):
 
         self.arr = pd.read_csv(os.path.join(self.raw_dir, self.raw_file_names[0]), index_col=0)
         self.seqid = self.arr.index
-        self.sumstats_dict = dict()
+        self.sumstats_dict = calc_sumstats(self.arr.loc[self.data_split_dict['train_ind']])
+        # self.sumstats_dict = dict()
 
     @property
     def raw_file_names(self):
@@ -174,7 +180,7 @@ class NNNDataset(InMemoryDataset):
     @property
     def train_set(self):
         ind = np.searchsorted(self.seqid, 
-                                    self.data_split_dict['train_ind'])
+                              self.data_split_dict['train_ind'])
         return self.index_select(ind)
 
     @property
@@ -243,9 +249,6 @@ class NNNDatasetdHTmV1(NNNDatasetdHTmV0):
     Predict fitted dH and Tm parameters
     Latest version
     """
-    # def __init__(self, root, transform=None, pre_transform=None, pre_filter=None):
-    #     super().__init__(root, transform, pre_transform, pre_filter)
-    #     self.sumstats_dict = calc_sumstats(self.arr)
         
     @property
     def raw_file_names(self):
@@ -280,7 +283,15 @@ class NNNCurveDataset(NNNDataset):
 class NNNDatasetWithDuplex(NNNDataset):
     def __init__(self, root, transform=None, pre_transform=None, pre_filter=None):
         super().__init__(root, transform, pre_transform, pre_filter)
-        self.seqid = self.arr['SEQID']
+        self.data, self.slices = torch.load(self.processed_paths[0])
+
+        with open(os.path.join(self.raw_dir, self.raw_file_names[1]), 'r') as fh:
+            self.data_split_dict = json.load(fh)
+
+        self.arr = self.load_val_df(os.path.join(self.raw_dir, self.raw_file_names[0]))
+        self.seqid = self.arr.index
+        self.sumstats_dict = calc_sumstats(self.arr.loc[self.data_split_dict['train_ind']])
+        self.dataset_name_list = ['arr', 'uv', 'lit_uv', 'ov']
         
     @property
     def raw_file_names(self):
@@ -289,31 +300,53 @@ class NNNDatasetWithDuplex(NNNDataset):
     @property
     def processed_file_names(self):
         return ['combined_data_v0.pt']
+    
+    @staticmethod
+    def format_refseq(refseq):
+        if isinstance(refseq, str) and '[' in refseq:
+            return eval(refseq)
+        else:
+            return refseq
+        
+    def load_val_df(self, filename):
+        # you MUST sort the df by SEQID as we use np.searchsorted()
+        df = pd.read_csv(filename).set_index('SEQID')
+        df = df.sort_index()
+        df.RefSeq = df.RefSeq.apply(self.format_refseq)
+        return df
+        
+        
+    def get_data_split_subset(self, split='val', dataset_name='arr'):
+        """
+        Get a subset of the data by dataset name
+        Args:
+            dataset_name - str, {'arr', 'uv', 'lit_uv', 'ov'} as in `self.dataset_name_list`
+        """
+        dataset_mask = self.arr.eval('dataset == "%s"' % dataset_name)
+        split_ind = np.searchsorted(self.seqid, 
+                self.data_split_dict[split+'_ind'])
+        # indices for datapoints both in the dataset and the data split
+        ind = list(set(split_ind) & set(np.where(dataset_mask)[0]))
+        return self.index_select(ind)
+                
         
     def process(self):
-        def format_refseq(refseq):
-            if isinstance(refseq, str) and '[' in refseq:
-                return eval(refseq)
-            else:
-                return refseq
-                
         print('processing', self.raw_dir)
-        self.arr = pd.read_csv(os.path.join(self.raw_dir, self.raw_file_names[0]))
-        self.arr.RefSeq = self.arr.RefSeq.apply(format_refseq)
-        data_list = [row2graphdata(row) for _,row in self.arr.iterrows()]
+        self.arr = self.load_val_df(os.path.join(self.raw_dir, self.raw_file_names[0]))
 
-        if self.pre_filter is not None:
-            data_list = [data for data in data_list if self.pre_filter(data)]
-
-        if self.pre_transform is not None:
-            data_list = [self.pre_transform(data) for data in data_list]
-
-        data, slices = self.collate(data_list)
-        torch.save((data, slices), self.processed_paths[0])
+        with open(os.path.join(self.raw_dir, self.raw_file_names[1]), 'r') as fh:
+            self.data_split_dict = json.load(fh)
+            
+        self.sumstats_dict = calc_sumstats(self.arr.loc[self.data_split_dict['train_ind']])
+        data_list = [row2graphdata(row, self.sumstats_dict, method='normalize') for _,row in self.arr.iterrows()]
+        super().process_data_list(data_list)
         
 
 def sweep_model():
-    with wandb.init() as run:
+    """
+    Run a sweep
+    """
+    with wandb.init(project="NNN_GNN") as run:
         config = wandb.config
         # make the model, data, and optimization problem
         model, train_loader, test_loader, criterion, optimizer = make(config)
@@ -325,7 +358,9 @@ def sweep_model():
         test(model, train_loader, test_loader)
 
 def model_pipeline(hyperparameters):
-
+    """
+    Run a single model
+    """
     # tell wandb to get started
     with wandb.init(project="NNN_GNN", config=hyperparameters):
       # access all HPs through wandb.config, so logging matches execution!
@@ -339,7 +374,7 @@ def model_pipeline(hyperparameters):
       train(model, train_loader, test_loader, criterion, optimizer, config)
 
       # and test its final performance
-      test(model, train_loader, test_loader)
+      test(model, train_loader, test_loader, test_loader_dict)
 
     return model
 
@@ -380,6 +415,15 @@ def make(config):
     criterion = torch.nn.MSELoss()
     optimizer = torch.optim.Adam(
         model.parameters(), lr=config['learning_rate'])
+    
+    # A dict of validation datasets by dataset_name
+    if hasattr(dataset, 'dataset_name_list'):
+        test_loader_dict = dict()
+        for dataset_name in dataset.dataset_name_list:
+            test_loader_dict[dataset_name] = dataset.get_data_split_subset(split=config['mode'], dataset_name=dataset_name)
+            test_loader_dict[dataset_name].sumstats_dict = dataset.sumstats_dict
+        
+        return model, train_loader, test_loader, test_loader_dict, criterion, optimizer
     
     return model, train_loader, test_loader, criterion, optimizer
 
@@ -495,11 +539,18 @@ def get_loss(loader, model):
     model.eval()
 
     rmse = 0
+    n = len(loader.dataset)
     for data in loader:  # Iterate in batches over the training/test dataset.
         out = model(data.x.to(device), data.edge_index.to(device), 
                     data.edge_attr.to(device), data.batch.to(device)) 
-        rmse += float(((out - data.y.to(device))**2).sum())  # Check against ground-truth labels.
-    return np.sqrt(rmse / len(loader.dataset))  # Derive ratio of correct predictions.
+        error = float(((out - data.y.to(device))**2).sum())
+        if np.isnan(error):
+            print('edge_index',data.edge_index, 'batch', data.batch)
+            n -= 1
+        else:
+            rmse += error  # Check against ground-truth labels.
+            
+    return np.sqrt(rmse / n)  # Derive ratio of correct predictions.
 
 
 def unorm(arr, sumstats_dict):
@@ -519,6 +570,10 @@ def model_pred(model, data, device='cuda:0'):
 
 
 def get_truth_pred(loader, model):
+    """
+    Args:
+        result - dict(y=y, pred=pred), dict[np.array (n,2)]
+    """
 
     y = np.zeros((0,2))
     pred = np.zeros((0,2))
@@ -537,6 +592,10 @@ def get_truth_pred(loader, model):
     
 
 def plot_truth_pred(result, ax, param='dH', title='Train'):
+    """
+    Args:
+        result - dict(y=y, pred=pred), dict[np.array (n,2)]
+    """
     color_dict = dict(dH='c', Tm='cornflowerblue', dG_37='teal', dS='steelblue')
     if param == 'dH':
         col = 0
@@ -548,9 +607,13 @@ def plot_truth_pred(result, ax, param='dH', title='Train'):
     c = color_dict[param]
 
     y, pred = result['y'][:, col], result['pred'][:, col]
+    nan_mask = np.isnan(y)
+    y, pred = y[~nan_mask], pred[~nan_mask]
     ax.scatter(y, pred, c=c, marker='D', alpha=.05)
-    rmse = np.sqrt(np.mean((y - pred)**2))
-    mae = np.mean(np.abs(y - pred))
+    rmse = np.sqrt(np.nanmean((y - pred)**2))
+    mae = np.nanmean(np.abs(y - pred))
+    if np.isnan(rmse):
+        print(y[:10], pred[:10])
     ax.set_xlim(lim)
     ax.set_ylim(lim)
     ax.set_xlabel('measured ' + param)
@@ -589,12 +652,12 @@ def test(model, train_loader, test_loader):
     train_result = get_truth_pred(train_loader, model)
     test_result = get_truth_pred(test_loader, model)
 
-    fig, ax = plt.subplots(2, 2, figsize=(12,12))
+    fig, ax = plt.subplots(2, 2, figsize=(8,8))
     _ = plot_truth_pred(train_result, ax[0,0], param='dH')
     _ = plot_truth_pred(train_result, ax[0,1], param='Tm')
-    dH_rmse, dH_mae = plot_truth_pred(test_result, ax[1,0], param='dH', title='Validation')
-    Tm_rmse, Tm_mae = plot_truth_pred(test_result, ax[1,1], param='Tm', title='Validation')
-    wandb.log({'fig': fig})
+    dH_rmse, dH_mae = plot_truth_pred(test_result, ax[1,0], param='dH', title='Array Validation')
+    Tm_rmse, Tm_mae = plot_truth_pred(test_result, ax[1,1], param='Tm', title='Array Validation')
+    wandb.log({'fig': wandb.Image(fig)})
     wandb.run.summary["dH_rmse"] = dH_rmse
     wandb.run.summary["dH_mae"] = dH_mae
     wandb.run.summary["Tm_rmse"] = Tm_rmse
