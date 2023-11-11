@@ -281,17 +281,17 @@ class NNNCurveDataset(NNNDataset):
 
 
 class NNNDatasetWithDuplex(NNNDataset):
-    def __init__(self, root, transform=None, pre_transform=None, pre_filter=None):
-        super().__init__(root, transform, pre_transform, pre_filter)
-        self.data, self.slices = torch.load(self.processed_paths[0])
+    # def __init__(self, root, transform=None, pre_transform=None, pre_filter=None):
+    #     super().__init__(root, transform, pre_transform, pre_filter)
+    #     self.data, self.slices = torch.load(self.processed_paths[0])
 
-        with open(os.path.join(self.raw_dir, self.raw_file_names[1]), 'r') as fh:
-            self.data_split_dict = json.load(fh)
+    #     with open(os.path.join(self.raw_dir, self.raw_file_names[1]), 'r') as fh:
+    #         self.data_split_dict = json.load(fh)
 
-        self.arr = self.load_val_df(os.path.join(self.raw_dir, self.raw_file_names[0]))
-        self.seqid = self.arr.index
-        self.sumstats_dict = calc_sumstats(self.arr.loc[self.data_split_dict['train_ind']])
-        self.dataset_name_list = ['arr', 'uv', 'lit_uv', 'ov']
+    #     self.arr = self.load_val_df(os.path.join(self.raw_dir, self.raw_file_names[0]))
+    #     self.seqid = self.arr.index
+    #     self.sumstats_dict = calc_sumstats(self.arr.loc[self.data_split_dict['train_ind']])
+    #     self.dataset_name_list = ['arr', 'uv', 'lit_uv', 'ov']
         
     @property
     def raw_file_names(self):
@@ -301,45 +301,45 @@ class NNNDatasetWithDuplex(NNNDataset):
     def processed_file_names(self):
         return ['combined_data_v0.pt']
     
-    @staticmethod
-    def format_refseq(refseq):
-        if isinstance(refseq, str) and '[' in refseq:
-            return eval(refseq)
-        else:
-            return refseq
+    # @staticmethod
+    # def format_refseq(refseq):
+    #     if isinstance(refseq, str) and '[' in refseq:
+    #         return eval(refseq)
+    #     else:
+    #         return refseq
         
-    def load_val_df(self, filename):
-        # you MUST sort the df by SEQID as we use np.searchsorted()
-        df = pd.read_csv(filename).set_index('SEQID')
-        df = df.sort_index()
-        df.RefSeq = df.RefSeq.apply(self.format_refseq)
-        return df
+    # def load_val_df(self, filename):
+    #     # you MUST sort the df by SEQID as we use np.searchsorted()
+    #     df = pd.read_csv(filename).set_index('SEQID')
+    #     df = df.sort_index()
+    #     df.RefSeq = df.RefSeq.apply(self.format_refseq)
+    #     return df
         
         
-    def get_data_split_subset(self, split='val', dataset_name='arr'):
-        """
-        Get a subset of the data by dataset name
-        Args:
-            dataset_name - str, {'arr', 'uv', 'lit_uv', 'ov'} as in `self.dataset_name_list`
-        """
-        dataset_mask = self.arr.eval('dataset == "%s"' % dataset_name)
-        split_ind = np.searchsorted(self.seqid, 
-                self.data_split_dict[split+'_ind'])
-        # indices for datapoints both in the dataset and the data split
-        ind = list(set(split_ind) & set(np.where(dataset_mask)[0]))
-        return self.index_select(ind)
+    # def get_data_split_subset(self, split='val', dataset_name='arr'):
+    #     """
+    #     Get a subset of the data by dataset name
+    #     Args:
+    #         dataset_name - str, {'arr', 'uv', 'lit_uv', 'ov'} as in `self.dataset_name_list`
+    #     """
+    #     dataset_mask = self.arr.eval('dataset == "%s"' % dataset_name)
+    #     split_ind = np.searchsorted(self.seqid, 
+    #             self.data_split_dict[split+'_ind'])
+    #     # indices for datapoints both in the dataset and the data split
+    #     ind = list(set(split_ind) & set(np.where(dataset_mask)[0]))
+    #     return self.index_select(ind)
                 
         
-    def process(self):
-        print('processing', self.raw_dir)
-        self.arr = self.load_val_df(os.path.join(self.raw_dir, self.raw_file_names[0]))
+    # def process(self):
+    #     print('processing', self.raw_dir)
+    #     self.arr = self.load_val_df(os.path.join(self.raw_dir, self.raw_file_names[0]))
 
-        with open(os.path.join(self.raw_dir, self.raw_file_names[1]), 'r') as fh:
-            self.data_split_dict = json.load(fh)
+    #     with open(os.path.join(self.raw_dir, self.raw_file_names[1]), 'r') as fh:
+    #         self.data_split_dict = json.load(fh)
             
-        self.sumstats_dict = calc_sumstats(self.arr.loc[self.data_split_dict['train_ind']])
-        data_list = [row2graphdata(row, self.sumstats_dict, method='normalize') for _,row in self.arr.iterrows()]
-        super().process_data_list(data_list)
+    #     self.sumstats_dict = calc_sumstats(self.arr.loc[self.data_split_dict['train_ind']])
+    #     data_list = [row2graphdata(row, self.sumstats_dict, method='normalize') for _,row in self.arr.iterrows()]
+    #     super().process_data_list(data_list)
         
 
 def sweep_model():
@@ -374,7 +374,7 @@ def model_pipeline(hyperparameters):
       train(model, train_loader, test_loader, criterion, optimizer, config)
 
       # and test its final performance
-      test(model, train_loader, test_loader, test_loader_dict)
+      test(model, train_loader, test_loader)
 
     return model
 
