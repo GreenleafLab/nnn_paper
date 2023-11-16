@@ -10,11 +10,14 @@ import numpy as np
 import pandas as pd
 from scipy import stats
 import matplotlib.pyplot as plt
+from matplotlib.ticker import MultipleLocator
 import seaborn as sns
 import json, os, sys
 import sklearn
 from scipy.stats import pearsonr
 from sklearn.metrics import r2_score
+from pprint import pprint
+from operator import itemgetter
 
 from torch_geometric.data import InMemoryDataset, Data
 from torch_geometric.loader import DataLoader
@@ -93,7 +96,7 @@ def onehot_nucleotide(seq_str):
     return encode_arr
 
 def norm_p(p, pname, sumstats_dict, method='normalize'):
-    if len(sumstats_dict) == 0:
+    if sumstats_dict is None:
         return p
     
     if method == 'standardize':
@@ -103,7 +106,7 @@ def norm_p(p, pname, sumstats_dict, method='normalize'):
     
 
 def unorm_p(p, pname, sumstats_dict, method='normalize'):
-    if len(sumstats_dict) == 0:
+    if sumstats_dict is None:
         return p
     
     if method == 'standardize':
@@ -167,7 +170,8 @@ class NNNDataset(InMemoryDataset):
         self.arr = pd.read_csv(os.path.join(self.raw_dir, self.raw_file_names[0]), index_col=0)
         self.seqid = self.arr.index
         self.sumstats_dict = calc_sumstats(self.arr.loc[self.data_split_dict['train_ind']])
-        # self.sumstats_dict = dict()
+        print('Initiating, summary statistis of the training set is:')
+        pprint(self.sumstats_dict)
 
     @property
     def raw_file_names(self):
@@ -208,16 +212,15 @@ class NNNDataset(InMemoryDataset):
     def process(self):
         print(self.raw_dir)
         self.arr = pd.read_csv(os.path.join(self.raw_dir, self.raw_file_names[0]), index_col=0)
-        data_list = [row2graphdata(row) for _,row in self.arr.iterrows()]
+        
+        with open(os.path.join(self.raw_dir, self.raw_file_names[1]), 'r') as fh:
+            self.data_split_dict = json.load(fh)
+            
+        self.sumstats_dict = calc_sumstats(self.arr.loc[self.data_split_dict['train_ind']])
+        data_list = [row2graphdata(row, sumstats_dict=self.sumstats_dict, method='normalize') for _,row in self.arr.iterrows()]
 
-        if self.pre_filter is not None:
-            data_list = [data for data in data_list if self.pre_filter(data)]
-
-        if self.pre_transform is not None:
-            data_list = [self.pre_transform(data) for data in data_list]
-
-        data, slices = self.collate(data_list)
-        torch.save((data, slices), self.processed_paths[0])
+        self.process_data_list(data_list)
+        
 
 class NNNDatasetdHTmV0(NNNDataset):
     def __init__(self, root, transform=None, pre_transform=None, pre_filter=None):
@@ -281,17 +284,17 @@ class NNNCurveDataset(NNNDataset):
 
 
 class NNNDatasetWithDuplex(NNNDataset):
-    # def __init__(self, root, transform=None, pre_transform=None, pre_filter=None):
-    #     super().__init__(root, transform, pre_transform, pre_filter)
-    #     self.data, self.slices = torch.load(self.processed_paths[0])
+    def __init__(self, root, transform=None, pre_transform=None, pre_filter=None):
+        super().__init__(root, transform, pre_transform, pre_filter)
+        # self.data, self.slices = torch.load(self.processed_paths[0])
 
-    #     with open(os.path.join(self.raw_dir, self.raw_file_names[1]), 'r') as fh:
-    #         self.data_split_dict = json.load(fh)
+        # with open(os.path.join(self.raw_dir, self.raw_file_names[1]), 'r') as fh:
+        #     self.data_split_dict = json.load(fh)
 
-    #     self.arr = self.load_val_df(os.path.join(self.raw_dir, self.raw_file_names[0]))
-    #     self.seqid = self.arr.index
-    #     self.sumstats_dict = calc_sumstats(self.arr.loc[self.data_split_dict['train_ind']])
-    #     self.dataset_name_list = ['arr', 'uv', 'lit_uv', 'ov']
+        # self.arr = self.load_val_df(os.path.join(self.raw_dir, self.raw_file_names[0]))
+        # self.seqid = self.arr.index
+        # self.sumstats_dict = calc_sumstats(self.arr.loc[self.data_split_dict['train_ind']])
+        self.dataset_name_list = ['arr', 'uv', 'lit_uv', 'ov']
         
     @property
     def raw_file_names(self):
@@ -301,6 +304,14 @@ class NNNDatasetWithDuplex(NNNDataset):
     def processed_file_names(self):
         return ['combined_data_v0.pt']
     
+    
+    # @staticmethod
+    # def format_refseq(refseq):
+    #     if isinstance(refseq, str) and '[' in refseq:
+    #         return eval(refseq)
+    #     else:
+    #         return refseq
+            
     # @staticmethod
     # def format_refseq(refseq):
     #     if isinstance(refseq, str) and '[' in refseq:
@@ -308,27 +319,33 @@ class NNNDatasetWithDuplex(NNNDataset):
     #     else:
     #         return refseq
         
-    # def load_val_df(self, filename):
-    #     # you MUST sort the df by SEQID as we use np.searchsorted()
-    #     df = pd.read_csv(filename).set_index('SEQID')
-    #     df = df.sort_index()
-    #     df.RefSeq = df.RefSeq.apply(self.format_refseq)
-    #     return df
+    def get_data_split_subset(self, split='val', dataset_name='arr', sample=1):
+        """
+        Get a subset of the data by dataset name
+        Args:
+            dataset_name - str, {'arr', 'uv', 'lit_uv', 'ov'} as in `self.dataset_name_list`
+            sample - float, 0~1 ratio to randomly sample the dataset
+        """
+        dataset_mask = self.arr.eval('dataset == "%s"' % dataset_name)
+        split_ind = np.searchsorted(self.seqid, 
+                self.data_split_dict[split+'_ind'])
+        # indices for datapoints both in the dataset and the data split
+        ind = list(set(split_ind) & set(np.where(dataset_mask)[0]))
         
+        if sample < 1:
+            np.random.seed(99)
+            ind = np.random.choice(ind, size=int(sample*len(ind)), replace=False)
+            
+        return self.index_select(ind)
         
-    # def get_data_split_subset(self, split='val', dataset_name='arr'):
-    #     """
-    #     Get a subset of the data by dataset name
-    #     Args:
-    #         dataset_name - str, {'arr', 'uv', 'lit_uv', 'ov'} as in `self.dataset_name_list`
-    #     """
-    #     dataset_mask = self.arr.eval('dataset == "%s"' % dataset_name)
-    #     split_ind = np.searchsorted(self.seqid, 
-    #             self.data_split_dict[split+'_ind'])
-    #     # indices for datapoints both in the dataset and the data split
-    #     ind = list(set(split_ind) & set(np.where(dataset_mask)[0]))
-    #     return self.index_select(ind)
-                
+    @property
+    def val_set(self):
+        val_data = self.get_data_split_subset(split='val', dataset_name='arr')
+        return val_data
+        
+    @property
+    def test_set(self):
+        return self.get_data_split_subset(split='test', dataset_name='arr')
         
     # def process(self):
     #     print('processing', self.raw_dir)
@@ -349,32 +366,49 @@ def sweep_model():
     with wandb.init(project="NNN_GNN") as run:
         config = wandb.config
         # make the model, data, and optimization problem
-        model, train_loader, test_loader, criterion, optimizer = make(config)
+        material_dict = make(config)
+        model, train_loader, test_loader, criterion, optimizer = \
+            itemgetter('model', 'train_loader', 'test_loader', 'criterion', 'optimizer')(material_dict)
 
         # and use them to train the model
         train(model, train_loader, test_loader, criterion, optimizer, config)
 
         # and test its final performance
-        test(model, train_loader, test_loader)
+        if 'test_loader_dict' in material_dict:
+            test(model, train_loader, test_loader, material_dict['test_loader_dict'])
+        else:
+            test(model, train_loader, test_loader)
 
-def model_pipeline(hyperparameters):
+
+def model_pipeline(hyperparameters, save_model=False):
     """
     Run a single model
     """
     # tell wandb to get started
     with wandb.init(project="NNN_GNN", config=hyperparameters):
-      # access all HPs through wandb.config, so logging matches execution!
-      config = wandb.config
+        # access all HPs through wandb.config, so logging matches execution!
+        config = wandb.config
 
-      # make the model, data, and optimization problem
-      model, train_loader, test_loader, criterion, optimizer = make(config)
-      print(model)
+        # make the model, data, and optimization problem
+        material_dict = make(config)
+        model, train_loader, test_loader, criterion, optimizer = \
+            itemgetter('model', 'train_loader', 'test_loader', 'criterion', 'optimizer')(material_dict)
 
-      # and use them to train the model
-      train(model, train_loader, test_loader, criterion, optimizer, config)
+        if 'test_loader_dict' in material_dict:
+            extra_kwargs = dict(test_loader_dict=material_dict['test_loader_dict'])
+        else:
+            extra_kwargs = dict()
+            
+        # and use them to train the model
+        train(model, train_loader, test_loader, criterion, optimizer, config, **extra_kwargs)
 
-      # and test its final performance
-      test(model, train_loader, test_loader)
+        # and test its final performance
+        test(model, train_loader, test_loader, **extra_kwargs)
+            
+        if save_model:
+            ## SAVING MODEL ##
+            model_path = f'/mnt/d/data/nnn/models/gnn_state_dict_{wandb.run.name}.pt'
+            torch.save(model.state_dict(), model_path)
 
     return model
 
@@ -397,13 +431,17 @@ def make(config):
     else:
         raise ValueError(config['dataset'])
         
+    ### Data Loaders ###
     has_gpu = torch.cuda.is_available()
-    train_loader = DataLoader(dataset.train_set, batch_size=config['batch_size'],
-                            shuffle=True, pin_memory=has_gpu)
-    test_loader = DataLoader(getattr(dataset, config['mode']+'_set'), batch_size=config['batch_size'],
-                            shuffle=False, pin_memory=has_gpu)
+    get_data_loader = lambda data_list, shuffle: DataLoader(data_list, batch_size=config['batch_size'], 
+                                                            shuffle=shuffle, pin_memory=has_gpu)
+    train_loader = get_data_loader(
+        dataset.get_data_split_subset('train', 'arr', sample=config['use_train_set_ratio']),
+        shuffle=True)
+    test_loader = get_data_loader(getattr(dataset, config['mode']+'_set'), False)
     train_loader.sumstats_dict = dataset.sumstats_dict
     test_loader.sumstats_dict = dataset.sumstats_dict
+    
     
     # Make the model
     if config['architecture'] == 'GraphTransformer':
@@ -416,17 +454,22 @@ def make(config):
     optimizer = torch.optim.Adam(
         model.parameters(), lr=config['learning_rate'])
     
-    # A dict of validation datasets by dataset_name
+    # An EXTRA dict of validation datasets by dataset_name
+    # only for NNN_v2 (with duplex) now
     if hasattr(dataset, 'dataset_name_list'):
         test_loader_dict = dict()
         for dataset_name in dataset.dataset_name_list:
-            test_loader_dict[dataset_name] = dataset.get_data_split_subset(split=config['mode'], dataset_name=dataset_name)
+            test_loader_dict[dataset_name] = get_data_loader(
+                dataset.get_data_split_subset(split=config['mode'], dataset_name=dataset_name),
+                shuffle=False
+            )
             test_loader_dict[dataset_name].sumstats_dict = dataset.sumstats_dict
         
-        return model, train_loader, test_loader, test_loader_dict, criterion, optimizer
+        return dict(model=model, train_loader=train_loader, test_loader=test_loader, 
+                    test_loader_dict=test_loader_dict, criterion=criterion, optimizer=optimizer)
     
-    return model, train_loader, test_loader, criterion, optimizer
-
+    return dict(model=model, train_loader=train_loader, test_loader=test_loader, 
+                criterion=criterion, optimizer=optimizer)
 
 class GTransformer(torch.nn.Module):
     def __init__(self, config):
@@ -596,17 +639,25 @@ def plot_truth_pred(result, ax, param='dH', title='Train'):
     Args:
         result - dict(y=y, pred=pred), dict[np.array (n,2)]
     """
+    get_dG_37 = lambda dH_Tm: dH_Tm[0] * (1 - (273.15 + 37) / (273.15 + dH_Tm[1]))
     color_dict = dict(dH='c', Tm='cornflowerblue', dG_37='teal', dS='steelblue')
-    if param == 'dH':
-        col = 0
-        lim = [-55, -5]
-    elif param == 'Tm':
-        col = 1
-        lim = [20, 60]
+    if param == 'dG_37':
+        col = -1
+        y = np.array([get_dG_37(dH_Tm) for dH_Tm in result['y']])
+        pred = np.array([get_dG_37(dH_Tm) for dH_Tm in result['pred']])
+        lim = [-7, 5]
+    else:
+        if param == 'dH':
+            col = 0
+            lim = [-55, -5]
+        elif param == 'Tm':
+            col = 1
+            lim = [20, 60]
 
+        y, pred = result['y'][:, col], result['pred'][:, col]
+    
     c = color_dict[param]
 
-    y, pred = result['y'][:, col], result['pred'][:, col]
     nan_mask = np.isnan(y)
     y, pred = y[~nan_mask], pred[~nan_mask]
     ax.scatter(y, pred, c=c, marker='D', alpha=.05)
@@ -618,27 +669,62 @@ def plot_truth_pred(result, ax, param='dH', title='Train'):
     ax.set_ylim(lim)
     ax.set_xlabel('measured ' + param)
     ax.set_ylabel('predicted ' + param)
-    ax.set_title('%s: RMSE = %.3f, MAE = %.3f' % (title, rmse, mae))
+    ax.set_title('%s: RMSE = %.2f, MAE = %.2f' % (title, rmse, mae))
+    sns.despine()
 
     return rmse, mae
 
 
-def train(model, train_loader, test_loader, criterion, optimizer, config):
+def train(model, train_loader, test_loader, criterion, optimizer, config, test_loader_dict=None):
     """
     Calls train_epoch() and logs
     """
     # Tell wandb to watch what the model gets up to: gradients, weights, and more!
-    wandb.watch(model, criterion, log="all", log_freq=10)
+    wandb.watch(model, criterion, log="all", log_freq=10)   
 
     every_n_epoch = 10
     for epoch in range(config['n_epoch']):
         train_epoch(model, train_loader, criterion, optimizer, config)
         if epoch % every_n_epoch == 0:
+            # Array train and test
             train_rmse = get_loss(train_loader, model)
             test_rmse = get_loss(test_loader, model)
-            wandb.log({"train_rmse": train_rmse,
-                    "test_rmse": test_rmse})
+            wandb.log(data={"train_rmse": train_rmse,
+                            "test_rmse": test_rmse},
+                      step=epoch)
             print(f'Epoch: {epoch:03d}, Train RMSE: {train_rmse:.4f}, Test RMSE: {test_rmse:.4f}')
+            
+            # External test, generalization ability
+            if test_loader_dict is not None:
+                # Temporarily not using `uv` as it's crap
+                extra_test_result_dict = {dataset_name: get_truth_pred(loader, model) 
+                            for dataset_name, loader in test_loader_dict.items() if dataset_name != 'uv'}
+                
+                for dataset_name, test_result in extra_test_result_dict.items():
+                    log_extra_test_result(dataset_name, test_result, epoch)
+
+def log_extra_test_result(dataset_name, test_result, epoch):
+    """
+    Log extra test results during training without plotting
+    """
+    Tm = test_result['y'][:,1]
+    Tm_pred = test_result['pred'][:,1]
+    assert len(Tm) == len(Tm_pred), 'len of Tm is %d, but len of Tm_pred is %d' % (len(Tm), len(Tm_pred))
+    
+    Tm_corr = pearsonr(Tm, Tm_pred)[0]
+    Tm_bias = np.mean(Tm_pred) - np.mean(Tm)
+    Tm_pred_adj = Tm_pred - Tm_bias
+    Tm_mae = np.mean(np.abs(Tm - Tm_pred))
+    Tm_mae_adj = np.mean(np.abs(Tm - Tm_pred_adj))
+    
+    wandb.log(data={
+                    'Tm_corr_%s'%(dataset_name) : Tm_corr,
+                    'Tm_bias_%s'%(dataset_name) : Tm_bias,
+                    'Tm_mae_%s'%(dataset_name) : Tm_mae,
+                    'Tm_mae_adj_%s'%(dataset_name) : Tm_mae_adj,},
+              step=epoch,
+              )
+
 
 
 def get_n_param(model):
@@ -647,21 +733,80 @@ def get_n_param(model):
         n_param += np.prod(np.array(param.shape))
     return n_param
 
-def test(model, train_loader, test_loader):
+def test(model, train_loader, test_loader, test_loader_dict=None):
 
     train_result = get_truth_pred(train_loader, model)
     test_result = get_truth_pred(test_loader, model)
 
-    fig, ax = plt.subplots(2, 2, figsize=(8,8))
+    fig, ax = plt.subplots(2, 3, figsize=(17,12))
     _ = plot_truth_pred(train_result, ax[0,0], param='dH')
     _ = plot_truth_pred(train_result, ax[0,1], param='Tm')
-    dH_rmse, dH_mae = plot_truth_pred(test_result, ax[1,0], param='dH', title='Array Validation')
-    Tm_rmse, Tm_mae = plot_truth_pred(test_result, ax[1,1], param='Tm', title='Array Validation')
+    _ = plot_truth_pred(train_result, ax[0,2], param='dG_37')
+    dH_rmse, dH_mae = plot_truth_pred(test_result, ax[1,0], param='dH', title='Validation')
+    Tm_rmse, Tm_mae = plot_truth_pred(test_result, ax[1,1], param='Tm', title='Validation')
+    dG_37_rmse, dG_37_mae = plot_truth_pred(test_result, ax[1,2], param='dG_37', title='Validation')
+    plt.tight_layout()
     wandb.log({'fig': wandb.Image(fig)})
-    wandb.run.summary["dH_rmse"] = dH_rmse
-    wandb.run.summary["dH_mae"] = dH_mae
-    wandb.run.summary["Tm_rmse"] = Tm_rmse
-    wandb.run.summary["Tm_mae"] = Tm_mae
     wandb.run.summary["n_parameters"] = get_n_param(model)
-
-    plt.show()
+    
+    for m in ['dH_rmse', 'dH_mae', 'Tm_rmse', 'Tm_mae', 'dG_37_rmse', 'dG_37_mae']:
+        wandb.run.summary[m] = eval(m)
+    
+    if test_loader_dict is not None:
+        extra_test_result_dict = {dataset_name: get_truth_pred(loader, model) 
+                                  for dataset_name, loader in test_loader_dict.items() if dataset_name != 'arr'}
+        
+        fig_extra, ax = plt.subplots(1, len(extra_test_result_dict), figsize=(9,3))
+        i = 0
+        for dataset_name, test_result in extra_test_result_dict.items():
+            log_final_extra_test_results(dataset_name, test_result, Tm_only=True, ax=ax[i])
+            i += 1
+        sns.despine()
+        plt.tight_layout() 
+        wandb.log({'extra test results': wandb.Image(fig_extra)})
+        
+    # plt.show()
+    
+    
+def log_final_extra_test_results(dataset_name:str, test_result:dict, Tm_only:bool=True, ax=None):
+    """
+    Args:
+        result - dict(y=y, pred=pred), dict[np.array (n,2)]
+    """
+    if Tm_only:
+        result_df = pd.DataFrame(data=dict(
+            Tm=test_result['pred'][:,1],
+            Tm_pred=test_result['y'][:,1]))
+                
+        sns.scatterplot(data=result_df, x='Tm', y='Tm_pred', ax=ax,
+                        marker='o', edgecolor='k', 
+                        color=np.array([[252,223,120]])/256.)
+        
+        # Formatting the plot
+        # Don't want dependency on util.py so copying the code here
+        # Not the most elegant but who cares
+        ax.set_title(dataset_name)
+        xlim, ylim = ax.get_xlim(), ax.get_ylim()
+        lim_min = min(xlim[0], ylim[0])
+        lim_max = max(xlim[1], ylim[1])
+        new_lim = (lim_min, lim_max)
+        ax.set_xlim(new_lim)
+        ax.set_ylim(new_lim)
+        Tm_locator = 10
+        ax.xaxis.set_major_locator(MultipleLocator(Tm_locator))
+        ax.yaxis.set_major_locator(MultipleLocator(Tm_locator))
+        
+        # Logging to wandb
+        wandb.run.summary['Tm_mae_%s'%dataset_name] = np.nanmean(np.abs(result_df.Tm - result_df.Tm_pred))
+        wandb.run.summary['Tm_corr_%s'%dataset_name] = pearsonr(result_df.Tm, result_df.Tm_pred)[0]
+        fn = './out/%s_%s.csv' % (wandb.run.name, dataset_name)
+        result_df.to_csv(fn)
+        
+        result_table = wandb.Table(dataframe=result_df)
+        wandb.log({dataset_name+'_table': result_table})
+        # result_table_artifact = wandb.Artifact("%s_artifact"%dataset_name, type="dataset")
+        # result_table_artifact.add(result_table, dataset_name)
+        # result_table_artifact.add_file(fn)
+    else:
+        #TODO log both dH and Tm, not really necessary right now
+        pass

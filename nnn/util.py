@@ -124,7 +124,7 @@ def beutify_all_ax(ax, **kwargs):
         
 def beutify(ax, x_locator=None, y_locator=None,
             force_same_xy=False, add_margin=0,
-            shrink=False):
+            shrink=False, do_not_resize=False):
     sns.despine()
     matplotlib.rc('axes',edgecolor='k', linewidth=.5)
     ax.tick_params(colors='k', width=.5)
@@ -150,7 +150,8 @@ def beutify(ax, x_locator=None, y_locator=None,
         ax.yaxis.set_major_locator(MultipleLocator(y_locator))
         
     if shrink:
-        ax.figure.set_size_inches(4.5*cm, 3.25*cm)
+        if not do_not_resize:
+            ax.figure.set_size_inches(4.5*cm, 3.25*cm)
         ax.tick_params(axis='both', which='major', labelsize=5)
         ax.xaxis.label.set_size(5)
         ax.yaxis.label.set_size(5)

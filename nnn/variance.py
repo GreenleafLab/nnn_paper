@@ -196,7 +196,7 @@ def get_single_nt_contributions_df(df, y_col='ddG_37'):
     return contributions
     
 def plot_contributions_on_struct(contributions, target_struct,
-                                 log_scale=True, clip_max=np.inf, label_num=True, ax=None):
+                                 log_scale=True, clip_max=np.inf, label_num=True, ax=None, vmax=None):
     n = len(target_struct)
     c_log = np.zeros(n)
     c = np.zeros(n)
@@ -214,11 +214,17 @@ def plot_contributions_on_struct(contributions, target_struct,
         _, ax = plt.subplots()
 
     if label_num:
-        text_label = ['%.1f'%x for x in c_log]
+        # No label if value is zero
+        text_label = []
+        for x in c_log:
+            if x == 0:
+                text_label.append(' ')
+            else:
+                text_label.append('%.1f'%x)
     else:
         text_label = ' ' * n
         
-    draw_struct(text_label, target_struct, c=c, cmap='viridis', ax=ax)
+    draw_struct(text_label, target_struct, c=c, cmap='viridis', ax=ax, vmax=vmax)
     
     
 def calc_and_plot_hp_contributions_on_struct(hp_df, arr, y_col, ref_loop_seq='', **kwargs):
