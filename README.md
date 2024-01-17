@@ -15,13 +15,17 @@ Functions used for generation of figures are defined in `nnn/`.
 ## Setting up environments
 
 Three major conda environments were used:
+
     - `nnn.yml` most analysis in the repository
+    
     - `torch.yml` for training and running graph neural networks
+    
     - `nn_train.yml` for fitting and running linear regression models.
       Also available as a singularity container as defined in `nn_train.def`.
       
-    Packages `draw_rna` and `RiboGraphViz` were installed from file as directed on Das lab github repositories https://github.com/DasLab/draw_rna and https://github.com/DasLab/RiboGraphViz.
-    NUPACK4 was also manually installed from file as it requires a free liscence for download (https://docs.nupack.org/).
+Packages `draw_rna` and `RiboGraphViz` were installed from file as directed on Das lab github repositories https://github.com/DasLab/draw_rna and https://github.com/DasLab/RiboGraphViz.
+
+NUPACK4 was also manually installed from file as it requires a free liscence for download (https://docs.nupack.org/).
     
 ## Scripts for Library design
 
@@ -31,6 +35,7 @@ Python scripts in `scripts/` generates the sequences in the variant library and 
 
 Run `gnn_run.py` in `torch` envoronment, pointing to the path of the saved model state dict file.
 
-For questions, contact
-Yuxi Ke kyx@stanford.edu
+For any questions, contact
+Yuxi Ke (kyx@stanford.edu)
+
 Jan. 2024
