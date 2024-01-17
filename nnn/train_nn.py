@@ -3,8 +3,9 @@ import pandas as pd
 import matplotlib.pyplot as plt
 import os
 
-from . import fileio, mupack, modeling
+from . import util, fileio, mupack, modeling
 from . import motif_fit as mf
+from tqdm import tqdm
 
 import wandb
 
@@ -28,6 +29,9 @@ def model_pipeline(hyperparameters, tags=None):
 class MyData(object):
     def __init__(self, config=None) -> None:
         self.param_set_template_file = './models/dna04.json'
+        if config is not None:
+            if 'struct_pred_param_file' in config:
+                self.param_set_template_file = config['struct_pred_param_file']
         self.config = config
 
         
@@ -76,9 +80,33 @@ class MyData(object):
         
         return dict(arr=arr_val_df, lit_uv=lit_uv_val_df, ov=ov_val_df)        
     
+    def get_arr_1M_with_mfe_struct(self, struct_pred_param_file):
+        preprocessed_arr_1M_file = struct_pred_param_file.replace('.json', '_arr_1M.csv')
+        if os.path.isfile(preprocessed_arr_1M_file):
+            return pd.read_csv(preprocessed_arr_1M_file, index_col=0)
+        else:
+            arr_1M = pd.read_csv('./data/models/processed/arr_v1_1M_n=27732.csv', index_col=0)
+            for i,row in tqdm(arr_1M.iterrows()):
+                seq = row.RefSeq
+                arr_1M.loc[i, 'TargetStruct'] = util.get_mfe_struct(seq, param_set=struct_pred_param_file)
+                
+            arr_1M.to_csv(preprocessed_arr_1M_file)
+            return arr_1M
+        
     @property
     def arr_1M(self):
-        arr_1M = pd.read_csv('./data/models/processed/arr_v1_1M_n=27732.csv', index_col=0)
+        try:
+            if self.config['secondary_struct'] == 'mfe':
+                arr_1M = self.get_arr_1M_with_mfe_struct(self.config['struct_pred_param_file'])
+                arr_1M['fluor_dist'] = arr_1M.TargetStruct.apply(util.get_fluor_distance_from_structure)
+                arr_1M = arr_1M.query('fluor_dist == 0')
+            elif self.config['secondary_struct'] == 'target':
+                arr_1M = pd.read_csv('./data/models/processed/arr_v1_1M_n=27732.csv', index_col=0)
+        except:
+            print('Using default TargetStruct arr_1M file')
+            self.config['secondary_struct'] = 'target'
+            arr_1M = pd.read_csv('./data/models/processed/arr_v1_1M_n=27732.csv', index_col=0)
+        
         return arr_1M
         
     @property
@@ -289,7 +317,10 @@ def test(config, lr_dict=None, json_file=None,
                 val_result_fn = 'insert_name_here_val_result_df.csv'
 
         val_result_fn = os.path.join('./models/', val_result_fn)    
-        val_result_df.to_csv(val_result_fn)
+        try:
+            val_result_df.to_csv(val_result_fn)
+        except:
+            return val_result_df
     
     if save_metric_json:
         try:

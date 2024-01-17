@@ -151,7 +151,7 @@ def get_hairpin_loop_feature_list(row, stack_size=2, loop_base_size=0,
     return feature_list
     
     
-def get_feature_list(row, stack_size:int=2, sep_base_stack:bool=False, hairpin_mm:bool=False,
+def get_feature_list(row, stack_size:int=2, sep_base_stack:bool=True, hairpin_mm:bool=False,
                      fit_intercept:bool=False, symmetry:bool=False, ignore_base_stack:bool=False):
     """
     Keep dot bracket in the feature to account for bulges and mismatches etc.
@@ -310,7 +310,11 @@ def get_nupack_feature_list(row, fit_intercept:bool=False,
                                 
         else:
             """ internal loops """
-            seq1, seq2 = seq.split(' ')
+            try:
+                seq1, seq2 = seq.split(' ')
+            except:
+                print(seq, struct)
+                draw_struct(row.RefSeq, row.TargetStruct)
             n1 = len(seq1) - 2
             n2 = len(seq2) - 2
         

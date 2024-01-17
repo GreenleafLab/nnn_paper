@@ -286,14 +286,6 @@ class NNNCurveDataset(NNNDataset):
 class NNNDatasetWithDuplex(NNNDataset):
     def __init__(self, root, transform=None, pre_transform=None, pre_filter=None):
         super().__init__(root, transform, pre_transform, pre_filter)
-        # self.data, self.slices = torch.load(self.processed_paths[0])
-
-        # with open(os.path.join(self.raw_dir, self.raw_file_names[1]), 'r') as fh:
-        #     self.data_split_dict = json.load(fh)
-
-        # self.arr = self.load_val_df(os.path.join(self.raw_dir, self.raw_file_names[0]))
-        # self.seqid = self.arr.index
-        # self.sumstats_dict = calc_sumstats(self.arr.loc[self.data_split_dict['train_ind']])
         self.dataset_name_list = ['arr', 'uv', 'lit_uv', 'ov']
         
     @property
@@ -305,19 +297,6 @@ class NNNDatasetWithDuplex(NNNDataset):
         return ['combined_data_v0.pt']
     
     
-    # @staticmethod
-    # def format_refseq(refseq):
-    #     if isinstance(refseq, str) and '[' in refseq:
-    #         return eval(refseq)
-    #     else:
-    #         return refseq
-            
-    # @staticmethod
-    # def format_refseq(refseq):
-    #     if isinstance(refseq, str) and '[' in refseq:
-    #         return eval(refseq)
-    #     else:
-    #         return refseq
         
     def get_data_split_subset(self, split='val', dataset_name='arr', sample=1):
         """
@@ -379,6 +358,66 @@ def sweep_model():
         else:
             test(model, train_loader, test_loader)
 
+def run_saved_model(hyperparameters, 
+                    test_result_fn=None,
+                    log_wandb=True):
+    """
+    Run a single trained model from disk
+    """
+    if log_wandb:
+        # tell wandb to get started
+        with wandb.init(project="NNN_GNN", config=hyperparameters):
+            # access all HPs through wandb.config, so logging matches execution!
+            config = wandb.config
+            saved_model_path = config['saved_model_path']
+
+            # make the model, data, and optimization problem
+            material_dict = make(config)
+            model, train_loader, test_loader, criterion, optimizer = \
+                itemgetter('model', 'train_loader', 'test_loader', 'criterion', 'optimizer')(material_dict)
+
+            if 'test_loader_dict' in material_dict:
+                extra_kwargs = dict(test_loader_dict=material_dict['test_loader_dict'])
+            else:
+                extra_kwargs = dict()
+            
+            if test_result_fn is not None:
+                extra_kwargs['test_result_fn'] = test_result_fn
+                
+            # `model` is already "made" by `make()` but we want to load saved "state"
+            print('Loading saved model from', saved_model_path)
+            model.load_state_dict(torch.load(saved_model_path))
+            model.eval()
+
+            # and test its final performance
+            test(model, train_loader, test_loader, **extra_kwargs)
+    else:
+        saved_model_path = config['saved_model_path']
+
+        # make the model, data, and optimization problem
+        material_dict = make(config)
+        model, train_loader, test_loader = \
+            itemgetter('model', 'train_loader', 'test_loader')(material_dict)
+
+        if 'test_loader_dict' in material_dict:
+            extra_kwargs = dict(test_loader_dict=material_dict['test_loader_dict'])
+        else:
+            extra_kwargs = dict()
+        
+        if test_result_fn is not None:
+            extra_kwargs['test_result_fn'] = test_result_fn
+            
+        # `model` is already "made" by `make()` but we want to load saved "state"
+        print('Loading saved model from', saved_model_path)
+        model.load_state_dict(torch.load(saved_model_path))
+        model.eval()
+
+        # and test its final performance
+        test(model, train_loader, test_loader, log_wandb=False, **extra_kwargs)
+        
+        
+
+    
 
 def model_pipeline(hyperparameters, save_model=False):
     """
@@ -438,16 +477,13 @@ def make(config):
     train_loader = get_data_loader(
         dataset.get_data_split_subset('train', 'arr', sample=config['use_train_set_ratio']),
         shuffle=True)
-    test_loader = get_data_loader(getattr(dataset, config['mode']+'_set'), False)
+    test_loader = get_data_loader(getattr(dataset, config['mode']+'_set'), shuffle=False)
     train_loader.sumstats_dict = dataset.sumstats_dict
     test_loader.sumstats_dict = dataset.sumstats_dict
     
     
     # Make the model
-    if config['architecture'] == 'GraphTransformer':
-        model = GTransformer(config).to(device)
-    else:
-        raise 'Check `architecture` in config dictionary!'
+    model = GNN(config).to(device)
 
     # Make the loss and optimizer
     criterion = torch.nn.MSELoss()
@@ -471,9 +507,9 @@ def make(config):
     return dict(model=model, train_loader=train_loader, test_loader=test_loader, 
                 criterion=criterion, optimizer=optimizer)
 
-class GTransformer(torch.nn.Module):
+class GNN(torch.nn.Module):
     def __init__(self, config):
-        super(GTransformer, self).__init__()
+        super(GNN, self).__init__()
         torch.manual_seed(12345)
         num_node_features = 4
         num_edge_features = 3
@@ -488,12 +524,30 @@ class GTransformer(torch.nn.Module):
         self.graphconv_dropout = config['graphconv_dropout']
         self.linear_dropout = config['linear_dropout']
 
-        conv_list = ([
-            TransformerConv(num_node_features, config['hidden_channels'],
-                               heads=num_heads, edge_dim=num_edge_features, dropout=self.graphconv_dropout)] +
-            [TransformerConv(config['hidden_channels'], config['hidden_channels'],
-                               heads=num_heads, edge_dim=num_edge_features, dropout=self.graphconv_dropout)] *
-            (config['n_graphconv_layer'] - 1))
+        if config['architecture'] == 'GCN':
+            # GCN doesn't work yet
+            GConv = GCNConv
+            conv_list = ([
+                GConv(num_node_features, config['hidden_channels'],
+                        dropout=self.graphconv_dropout)] +
+                [GConv(config['hidden_channels'], config['hidden_channels'],
+                        dropout=self.graphconv_dropout)] *
+                (config['n_graphconv_layer'] - 1))
+        else:
+            if config['architecture'] == 'GraphTransformer':
+                GConv = TransformerConv
+            elif config['architecture'] == 'GraphAttention':
+                GConv = GATv2Conv
+            else:
+                raise 'Check `architecture` in config dictionary!'
+
+            conv_list = ([
+                GConv(num_node_features, config['hidden_channels'],
+                                heads=num_heads, edge_dim=num_edge_features, dropout=self.graphconv_dropout)] +
+                [GConv(config['hidden_channels'], config['hidden_channels'],
+                                heads=num_heads, edge_dim=num_edge_features, dropout=self.graphconv_dropout)] *
+                (config['n_graphconv_layer'] - 1))
+            
         self.convs = ModuleList(conv_list)
 
         # self.norm = BatchNorm(in_channels=config['hidden_channels'])
@@ -525,11 +579,14 @@ class GTransformer(torch.nn.Module):
         # self.trace = []
 
     def forward(self, x, edge_index, edge_attr, batch):
-        self.trace = []
+        
+        if self.concat:
+            self.trace = []
         # 1. Obtain node embeddings
         for i, l in enumerate(self.convs):
             x = l(x, edge_index, edge_attr)
-            self.trace.append(x)
+            if self.concat:
+                self.trace.append(x)
             x = F.leaky_relu(x)
             x = F.dropout(x, p=self.graphconv_dropout, training=self.training)
 
@@ -563,12 +620,12 @@ def train_epoch(model, train_loader, criterion, optimizer, config):
     """
 
     model.train()
-
+    
     for data in train_loader:  # Iterate in batches over the training dataset.
 
         out = model(data.x.to(device), data.edge_index.to(device), 
                     data.edge_attr.to(device), data.batch.to(device))  # Perform a single forward pass.
-
+        
         loss = criterion(out, data.y.to(device))  # Compute the loss.
         loss.backward()  # Derive gradients.
         optimizer.step()  # Update parameters based on gradients.
@@ -615,23 +672,39 @@ def model_pred(model, data, device='cuda:0'):
 def get_truth_pred(loader, model):
     """
     Args:
-        result - dict(y=y, pred=pred), dict[np.array (n,2)]
+        result - dict(y=y, pred=pred, aggr_list=aggr_list), dict[np.array (n,2)]
     """
+    activation = {}
+    def get_activation(name):
+        def hook(model, input, output):
+            activation[name] = output.detach().cpu().numpy()
+            print(name, 'activation', activation[name].shape)
+        return hook
 
+    handle = model.aggr.register_forward_hook(get_activation('aggr'))
+    aggr_list = []
+    
     y = np.zeros((0,2))
     pred = np.zeros((0,2))
     model.eval()
+    
     for i, data in enumerate(loader):
         y = np.concatenate((y, data.y.detach().numpy().reshape(-1,2)), axis=0)
         out = model_pred(model, data)
         pred = np.concatenate((pred, out), axis=0)
+        
+        aggr_list.append(activation['aggr'])
+
+    # detach the hook
+    handle.remove() 
 
     if hasattr(loader, 'sumstats_dict'):
         if len(loader.sumstats_dict) > 0:
             y = unorm(y, loader.sumstats_dict)
             pred = unorm(pred, loader.sumstats_dict)
 
-    return dict(y=y, pred=pred)
+    aggr_out = np.concatenate(aggr_list, axis=0)
+    return dict(y=y, pred=pred, aggr_out=aggr_out)
     
 
 def plot_truth_pred(result, ax, param='dH', title='Train'):
@@ -733,10 +806,13 @@ def get_n_param(model):
         n_param += np.prod(np.array(param.shape))
     return n_param
 
-def test(model, train_loader, test_loader, test_loader_dict=None):
+def test(model, train_loader, test_loader, test_loader_dict=None, test_result_fn=None, log_wandb=True):
 
     train_result = get_truth_pred(train_loader, model)
     test_result = get_truth_pred(test_loader, model)
+
+    if test_result_fn is not None:
+        np.savez(test_result_fn, **test_result)
 
     fig, ax = plt.subplots(2, 3, figsize=(17,12))
     _ = plot_truth_pred(train_result, ax[0,0], param='dH')
@@ -746,11 +822,12 @@ def test(model, train_loader, test_loader, test_loader_dict=None):
     Tm_rmse, Tm_mae = plot_truth_pred(test_result, ax[1,1], param='Tm', title='Validation')
     dG_37_rmse, dG_37_mae = plot_truth_pred(test_result, ax[1,2], param='dG_37', title='Validation')
     plt.tight_layout()
-    wandb.log({'fig': wandb.Image(fig)})
-    wandb.run.summary["n_parameters"] = get_n_param(model)
+    if log_wandb:
+        wandb.log({'fig': wandb.Image(fig)})
+        wandb.run.summary["n_parameters"] = get_n_param(model)
     
-    for m in ['dH_rmse', 'dH_mae', 'Tm_rmse', 'Tm_mae', 'dG_37_rmse', 'dG_37_mae']:
-        wandb.run.summary[m] = eval(m)
+        for m in ['dH_rmse', 'dH_mae', 'Tm_rmse', 'Tm_mae', 'dG_37_rmse', 'dG_37_mae']:
+            wandb.run.summary[m] = eval(m)
     
     if test_loader_dict is not None:
         extra_test_result_dict = {dataset_name: get_truth_pred(loader, model) 
@@ -763,7 +840,15 @@ def test(model, train_loader, test_loader, test_loader_dict=None):
             i += 1
         sns.despine()
         plt.tight_layout() 
-        wandb.log({'extra test results': wandb.Image(fig_extra)})
+        if log_wandb:
+            wandb.log({'extra test results': wandb.Image(fig_extra)})
+        
+        if test_result_fn is not None:
+            # only saving aggr_out for lit_uv and ov here.
+            # np.savez seems to support flat dictionaries
+            extra_aggr_out = {k: v['aggr_out'] for 
+                              k,v in extra_test_result_dict.items()}
+            np.savez(test_result_fn.replace('.npz', '_extra.npz'), **extra_aggr_out)
         
     # plt.show()
     

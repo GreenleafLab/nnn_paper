@@ -130,8 +130,9 @@ def get_feature_count_matrix(df, feature_method='get_stack_feature_list', featur
         # Remove features that every construct contains and is not intercept
         if feature_style == 'nupack':
             intercept_symbol = 'intercept#0'
-            intercept = feats.pop(intercept_symbol)
-            feats['intercept#intercept'] = intercept
+            if intercept_symbol in feats:
+                intercept = feats.pop(intercept_symbol)
+                feats['intercept#intercept'] = intercept
         else:
             intercept_symbol = 'intercept'
             

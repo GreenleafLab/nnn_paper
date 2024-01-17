@@ -30,3 +30,4 @@ dependencies:
     - nwalign3
     - python-louvain
     - sympy
+    - levenshtein

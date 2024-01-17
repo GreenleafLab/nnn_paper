@@ -7,6 +7,7 @@ import matplotlib
 from matplotlib.ticker import (MultipleLocator, FormatStrFormatter,
                                AutoMinorLocator)
 from nnn import util, plotting, motif_fit
+from sklearn.metrics import r2_score
 
 matplotlib.rcParams['pdf.fonttype'] = 42
 PNAMES = ['dH', 'Tm', 'dG_37']
@@ -50,6 +51,7 @@ def get_model_prediction(df=None, seq_list=None, struct_list=None, sodium=0.088,
         model_kwargs - Dict, extra parameters passed to the model
             for nupack:
                 if duplex, need 'DNA_conc:float or List[float]' in Molar
+                ensemble - bool
         append_df_suffix - If given and there is an input df, append the prediction to the 
             df and return. Otherwise, only return the prediction values.
     Returns:
@@ -153,11 +155,17 @@ def run_nupack(seq_list, struct_list, sodium, model_param_file, model_kwargs):
 
     result_df = pd.DataFrame(index=np.arange(len(seq_list)), columns=PNAMES)
     
-    '''sodium'''
+    # sodium
     if not isinstance(sodium, float):
         varied_sodium = True
     else:
         varied_sodium = False
+        
+    # structure or ensemble energy
+    ensemble = False
+    if 'ensemble' in model_kwargs:
+        if model_kwargs['ensemble']:
+            ensemble = True
     
     for i in range(len(seq_list)):
         seq, struct = seq_list[i], struct_list[i]
@@ -171,7 +179,7 @@ def run_nupack(seq_list, struct_list, sodium, model_param_file, model_kwargs):
         if not '+' in struct:
             # Hairpins
             row_result_dict = util.get_nupack_dH_dS_Tm_dG_37(
-                seq, struct, sodium=na, 
+                seq, struct, sodium=na, ensemble=ensemble,
                 return_dict=True, param_set=model_param_file)
         else:
             # > 1 strand, Duplexes
@@ -211,6 +219,7 @@ def get_metric_dict(val_result_df, param):
     metric['adjusted_rmse'] = util.rmse(y, y_pred_adj)
     metric['mae'] = util.mae(y, y_pred)
     metric['adjusted_mae'] = util.mae(y, y_pred_adj)
+    metric['r2'] = r2_score(y, y_pred_adj)
         
     return metric
 

@@ -14,7 +14,12 @@ fig/
 data/misc/
 data/wandb/
 data/wandb_gnn/
+data/series_merged
 data/processed/archive
+data/models/processed/distance_mat*
+data/models/out
+data/models/knn_out
+data/uv_melt/ECLTables
 !data/models
 
 *.wav

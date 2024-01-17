@@ -126,14 +126,14 @@ def find_mm_parent_df(mm_df, arr, which_side):
     df['parent'] = df.parent.apply(lambda x: x[0][0])
 
     ## get parent info ##
-    df = df.set_index('parent').join(arr[['dG_37', 'dG_37_se']], rsuffix='_parent').reset_index()
+    df = df.set_index('parent').join(arr[['dG_37', 'dG_37_se', 'dG_37_NUPACK_salt_corrected']], rsuffix='_parent').reset_index()
 
     ## add info ##
     df['flank'] = df.context.apply(lambda x: x[0]+x[-1]+'x'+x[2:4])
 
     df['ddG_37'] = (df.dG_37 - df.dG_37_parent).astype(float)
     df['ddG_37_se'] = (df.dG_37_se + df.dG_37_se_parent).astype(float)
-    
+    df['ddG_37_NUPACK_salt_corrected'] = (df.dG_37_NUPACK_salt_corrected - df.dG_37_NUPACK_salt_corrected_parent).astype(float)
     return df
     
 def find_hp_parent_df(hp_df, arr, ref_loop_seq):

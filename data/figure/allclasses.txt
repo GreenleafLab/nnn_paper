@@ -14,7 +14,7 @@ GNNNNNGGAAACNNNNNC
 rbbbbbrrrrrrbbbbbr
 
 TRIloop_1
-GGCNNNNNGCC
+GCGNNNNNCGC
 ((((...))))
 rrrbbbbbrrr
 
@@ -24,12 +24,12 @@ CGCGGNNNNNCCGCG
 rrrrrbbbbbrrrrr
 
 TRIloop_NNN
-GATCNNNNNNNCGCG
+GATCNNNNNNNGATC
 ((((((...))))))
 rrrrbbbbbbbrrrr
 
 TETRAloop_1
-GGCNNNNNNGCC
+GCGNNNNNNCGC
 ((((....))))
 rrrbbbbbbrrr
 
@@ -39,7 +39,7 @@ CGCGGNNNNNNCCGCG
 rrrrrbbbbbbrrrrr
 
 TETRAloop_NNN
-GATCNNNNNNNNCGCG
+GATCNNNNNNNNGATC
 ((((((....))))))
 rrrrbbbbbbbbrrrr
 

@@ -288,7 +288,12 @@ def lr_dict_2_nupack_json(lr_dict:util.LinearRegressionSVD, template_file:str, o
                     hp_mm = seq[-2:] + seq[:2]
                     loop_mid = seq[2:-2]
                     # `hairpin_loop_mid` is an intermediate parameter not in the final file
-                    hp_value = coef_p_dict['hairpin_loop_mid'][loop_mid]
+                    try:
+                        hp_value = coef_p_dict['hairpin_loop_mid'][loop_mid]
+                    except:
+                        lr_dict_template = fileio.read_pickle(template_file.replace('.json', '_lr_dict.pkl'))
+                        hp_value = lr_dict_template[p].coef_df.loc['hairpin_loop_mid#'+loop_mid].values[0]
+                        
                     if loop_size == 'triloop':
                         # NUPACK adds hairpin_mismatch on top of hairpin_tetraloop but not for triloop
                         # sort of funny

@@ -127,7 +127,7 @@ def beutify(ax, x_locator=None, y_locator=None,
             shrink=False, do_not_resize=False):
     sns.despine()
     matplotlib.rc('axes',edgecolor='k', linewidth=.5)
-    ax.tick_params(colors='k', width=.5)
+    ax.tick_params(colors='k', width=.5, length=2)
     ax.set_clip_on(False)
     
     if force_same_xy:
@@ -542,7 +542,7 @@ def calculate_tm(seq, target_struct, sodium, DNA_conc, param_set):
             lo = T
             
 
-def get_nupack_dH_dS_Tm_dG_37(seq, struct, sodium=1.0, return_dict=False, **kwargs):
+def get_nupack_dH_dS_Tm_dG_37(seq, struct, sodium=1.0, return_dict=False, ensemble=False, **kwargs):
     '''
     Return dH (kcal/mol), dS(kcal/mol), Tm (˚C), dG_37(kcal/mol)
     Use the better sodium correction equation
@@ -550,10 +550,17 @@ def get_nupack_dH_dS_Tm_dG_37(seq, struct, sodium=1.0, return_dict=False, **kwar
     T1=0
     T2=50
 
-    dG_37 = get_seq_structure_dG(seq, struct, 37, **kwargs)
+    if not ensemble:
+        dG_37 = get_seq_structure_dG(seq, struct, 37, **kwargs)
 
-    dG_1 = get_seq_structure_dG(seq, struct, T1, **kwargs)
-    dG_2 = get_seq_structure_dG(seq, struct, T2, **kwargs)
+        dG_1 = get_seq_structure_dG(seq, struct, T1, **kwargs)
+        dG_2 = get_seq_structure_dG(seq, struct, T2, **kwargs)
+    else:
+        dG_37 = get_seq_ensemble_dG(seq, 37, **kwargs)
+
+        dG_1 = get_seq_ensemble_dG(seq, T1, **kwargs)
+        dG_2 = get_seq_ensemble_dG(seq, T2, **kwargs)
+    
 
     dS = -1*(dG_2 - dG_1)/(T2 - T1)
     assert((dG_1 + dS*(T1+273.15)) - (dG_2 + dS*(T2+273.15)) < 1e-6)
