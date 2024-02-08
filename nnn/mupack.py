@@ -39,7 +39,7 @@ def center_new_param(old_dict, new_dict, verbose=False):
             print('\tMean value of fitted new_dict is %.3f' % fitted_mean)
             print('\tMean value of centered new_dict is %.3f\n' % get_dict_mean_val(new_dict))
     except:
-        pass
+        print('Nothing happened.\n')
     return new_dict
     
 """ Formatting Functions """
@@ -221,7 +221,22 @@ def get_adjusted_triloop_terminal_penalty(hairpin_triloop_dict, terminal_penalty
     
     return hairpin_triloop_dict
     
-           
+def get_hpmm_from_hptetra_hptri(p_dict):
+    """
+    Extracts hairpin mismatch parameters from tetraloop and triloop parameters
+    Needed because the hairpin mismatch parameters fitted in the NUPACK-compatible model
+    is not the same as that in the NUPACK file: they require an extra loop_mis parameter
+    Very confusing.
+    Args:
+        p_dict - param_set_dict['dH'] or param_set_dict['dG'], with p_dict['hairpin_tetraloop']
+            and p_dict['hairpin_triloop']
+    Returns:
+        hairpin_mismatch - dict, equivalent to p_dict['hairpin_mismatch']
+    """
+    hptetra = p_dict['hairpin_tetraloop']           
+    hptri = p_dict['hairpin_triloop']
+    
+    
     
 def lr_dict_2_nupack_json(lr_dict:util.LinearRegressionSVD, template_file:str, out_file:str, 
                           lr_step:str='full', center_new_parameters=False,
@@ -233,7 +248,8 @@ def lr_dict_2_nupack_json(lr_dict:util.LinearRegressionSVD, template_file:str, o
     Args:
         lr_dict - Dict, keys 'dH' and 'dG', 
             values are instances of the LinearRegressionSVD() class
-        lr_step - str, {'hairpin', 'full'}. If hairpin, only update the hairpin seq params
+        lr_step - str, {'hairpin', 'full'}. If hairpin, only update the hairpin seq params.
+            hairpin is for two-step fitting (archived)
         center_parameter - bool, if True, center the newly fitted parameters to the template category
         adjust_trilop_terminal_penalty - bool, only used when lr_step = 'hairpin', adjust the 
             terminal penalty off the hairpin_triloop parameters
@@ -242,12 +258,15 @@ def lr_dict_2_nupack_json(lr_dict:util.LinearRegressionSVD, template_file:str, o
     """
     param_name_dict = {'dH':'dH', 'dG':'dG_37'}
     
+    print('\nTemplate file:', template_file)
     ori_param_set_dict = fileio.read_json(template_file)
     param_set_dict = defaultdict()
     
     if lr_step == 'full':
         # Only centering new parameters here once as the ones in populated loopup tables are already 
         # built on the centered ones
+        # but hairpin_triloop and hairpin_tetraloop contains hairpin_loop_mid, which is not in the original ones
+        # need to center these two once more after populating the lookup table
         for p in param_name_dict:
             param_set_dict[p] = coef_df_2_dict(lr_dict[p].coef_df, template_dict=ori_param_set_dict[p],
                                                center_new_parameters=center_new_parameters)
@@ -258,6 +277,8 @@ def lr_dict_2_nupack_json(lr_dict:util.LinearRegressionSVD, template_file:str, o
         
         ### Populate the lookup tables ###
         for p in param_name_dict:
+            # the original uncentered parameters
+            # `param_set_dict` is centered
             coef_p_dict = coef_df_2_dict(lr_dict[p].coef_df)
         
             # `interior_n1_n2` (mismatches)
@@ -278,30 +299,28 @@ def lr_dict_2_nupack_json(lr_dict:util.LinearRegressionSVD, template_file:str, o
                             pass
                     param_set_dict[p][interior_name][seq] = new_value
                     
+            # hairpin loops
             loop_size_dict = dict(triloop=3, tetraloop=4)
             for loop_size in loop_size_dict:
                 hairpin_name = 'hairpin_' + loop_size
                 
                 loop_seqs = [''.join(x) + util.rcompliment(x[0]) # iterate all possible loop sequences
                               for x in itertools.product(list('ATCG'), repeat=loop_size_dict[loop_size] + 1)]
+                
+                # calculate values for each full hairpin loop sequuence
                 for seq in loop_seqs:
-                    hp_mm = seq[-2:] + seq[:2]
-                    loop_mid = seq[2:-2]
-                    # `hairpin_loop_mid` is an intermediate parameter not in the final file
-                    try:
-                        hp_value = coef_p_dict['hairpin_loop_mid'][loop_mid]
-                    except:
-                        lr_dict_template = fileio.read_pickle(template_file.replace('.json', '_lr_dict.pkl'))
-                        hp_value = lr_dict_template[p].coef_df.loc['hairpin_loop_mid#'+loop_mid].values[0]
-                        
-                    if loop_size == 'triloop':
-                        # NUPACK adds hairpin_mismatch on top of hairpin_tetraloop but not for triloop
-                        # sort of funny
-                        # also takes out terminal penalty
-                        hp_value += param_set_dict[p]['hairpin_mismatch'][hp_mm]
-                        hp_value -= param_set_dict[p]['terminal_penalty'][seq[-1]+seq[0]]
-                        
+                    hp_value = calc_hp_value(template_file, param_set_dict, p, coef_p_dict, seq, loop_size)
                     param_set_dict[p][hairpin_name][seq] = hp_value
+                    
+                # center the calculated hairpin_tetraloop and hairpin_triloop again
+                if center_new_param:
+                    print(f'\nCentering {p} of {hairpin_name} to {template_file}')
+                    ori_param_set_dict = fileio.read_json(template_file)
+                    param_set_dict[p][hairpin_name] = center_new_param(
+                        old_dict=ori_param_set_dict[p][hairpin_name], 
+                        new_dict=param_set_dict[p][hairpin_name],
+                        verbose=True)
+                    
                     
     elif lr_step == 'hairpin':
         hairpin_dict = {'dH': dict(hairpin_triloop=None, hairpin_tetraloop=None),
@@ -309,6 +328,8 @@ def lr_dict_2_nupack_json(lr_dict:util.LinearRegressionSVD, template_file:str, o
         
         for p in param_name_dict:
             if extract_hairpin_mismatch:
+                # this only happens when individual parameters for each triloop & tetraloop were fitted
+                # semi-archived
                 mm_dict = get_hairpin_mismatch(lr_dict[p])
                 # hairpin_dict[p]['hairpin_mismatch'] = center_new_param(ori_param_set_dict[p]['hairpin_mismatch'], new_dict=mm_dict)
 
@@ -332,6 +353,31 @@ def lr_dict_2_nupack_json(lr_dict:util.LinearRegressionSVD, template_file:str, o
     param_set_dict['name'] = os.path.split(out_file)[1].replace('.json', '')
     
     fileio.write_json(param_set_dict, out_file)
+
+def calc_hp_value(template_file, param_set_dict, p, coef_p_dict, seq, loop_size):
+    hp_mm = seq[-2:] + seq[:2]
+    loop_mid = seq[2:-2]
+    # `hairpin_loop_mid` is an intermediate parameter not in the final file
+    try:
+        hp_value = coef_p_dict['hairpin_loop_mid'][loop_mid]
+    except:
+        lr_dict_template = fileio.read_pickle(template_file.replace('.json', '_lr_dict.pkl'))
+        hp_value = lr_dict_template[p].coef_df.loc['hairpin_loop_mid#'+loop_mid].values[0]                       
+        
+    # this happens for both tri and tetra
+    try:
+        hp_value += coef_p_dict[p]['hairpin_mismatch'][hp_mm] 
+    except:
+        # use the parameter copied from the template
+        hp_value += param_set_dict[p]['hairpin_mismatch'][hp_mm]
+        
+                    
+    # NUPACK adds hairpin_mismatch on top of hairpin_tetraloop but not for triloop
+    # also takes out terminal penalty
+    if loop_size == 'triloop':
+        hp_value -= param_set_dict[p]['terminal_penalty'][seq[-1]+seq[0]]
+        
+    return hp_value
 
 
 """ Plotting functions """
