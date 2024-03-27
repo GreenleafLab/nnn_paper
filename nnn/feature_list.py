@@ -150,6 +150,27 @@ def get_hairpin_loop_feature_list(row, stack_size=2, loop_base_size=0,
         
     return feature_list
     
+def get_tloop_feature_list(row):
+    """
+    Get the full tetra- or tri-loop sequence with the next nearest neighbor pair to regress out
+    """
+    seq = row['RefSeq']
+    struct = row['TargetStruct']
+    loop_size = struct.count('.')
+    loop_loc = struct.find('.')
+    
+    tloop = seq[loop_loc - 1:loop_loc + loop_size + 1]
+    nnn_pair = seq[loop_loc - 2] + seq[loop_loc + loop_size + 1]
+    if loop_size == 3:
+        feature_list = ['hairpin_triloop#'+tloop, 'nnn_pair#'+nnn_pair]
+    elif loop_size == 4:
+        feature_list = ['hairpin_tetraloop#'+tloop, 'nnn_pair#'+nnn_pair]
+    else:
+        raise "Not a tloop"
+        
+        
+    return feature_list
+    
     
 def get_feature_list(row, stack_size:int=2, sep_base_stack:bool=True, hairpin_mm:bool=False,
                      fit_intercept:bool=False, symmetry:bool=False, ignore_base_stack:bool=False):
@@ -254,7 +275,8 @@ def get_feature_list(row, stack_size:int=2, sep_base_stack:bool=True, hairpin_mm
 
 
 def get_nupack_feature_list(row, fit_intercept:bool=False,
-                            directly_fit_3_4_hairpin_loop=True):
+                            directly_fit_3_4_hairpin_loop=True,
+                            single_mm_stacks=True):
     """
     Parameterize the hairpins according to NUPACK parameters.
     Use NUPACK parameter terminologies in the parameter names.
@@ -263,6 +285,8 @@ def get_nupack_feature_list(row, fit_intercept:bool=False,
         directly_fit_3_4_hairpin_loop - Bool, if False, do not directly fit 
             hairpin_triloop or hairpin_tetraloop, but populate the field from 
             calculation while saving to json
+        single_mm_stacks - bool, if True, add opposing two stacks as an extra parameter
+            for single mismatches (interior_1_1)
     """        
     sep = '#'
     hairpin_pattern = re.compile(r'^\([.]+\)') # hairpin pattern
@@ -347,7 +371,8 @@ def get_nupack_feature_list(row, fit_intercept:bool=False,
                     # extra intermediate parameter for oppositing stack interaction
                     # only for 1x1 mismatch
                     mm_stacks = seq1[0] + seq1[-1] + seq2[0] + seq2[-1]
-                    feature_list.append('interior_mismatch_stacks%s%s' % (sep, mm_stacks))
+                    if single_mm_stacks:
+                        feature_list.append('interior_mismatch_stacks%s%s' % (sep, mm_stacks))
                     feature_list.append('interior_mismatch%s%s' % (sep, mm1))
                     feature_list.append('interior_mismatch%s%s' % (sep, mm2))
                 elif interior_size > 2:

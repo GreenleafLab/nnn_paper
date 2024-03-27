@@ -426,7 +426,42 @@ def pred_variant(seq, struct, sodium=1.0, DNA_conc=None,
             pred_dict['Tm'] = get_Tm(pred_dict['dH'], pred_dict['dG'], celsius=37)
             return get_Na_adjusted_param(Na=sodium, from_Na=1.0, seq=seq, **pred_dict)
             
-            
+def regress_out_nnn_pair_tloop(mydata):
+    """
+    Returns:
+        tloop - df with NNN tloops, where dH and dG have next nearest neighbor pair regressed out.
+    """
+    my_df = mydata.arr_1M.join(mydata.annotation[['ConstructType']])
+    wc6_df = my_df.query('Series == "WatsonCrick" & ConstructType == "WC_6ntstem"')
+    wc6_df['to_add'] = wc6_df['RefSeq'].apply(lambda x: x[:4] == 'GATC')
+    tloop_query = '(Series == "TETRAloop" | Series == "TRIloop") & ConstructType == "NNN"'
+    tloop_df = my_df.query(tloop_query)
+    print(wc6_df.query('to_add').shape)
+    tloop_df = pd.concat((tloop_df, wc6_df.query('to_add').drop(columns='to_add')), axis=0)
+    print(tloop_df.shape)
+    
+    tloop_df['loop_size'] = tloop_df['TargetStruct'].apply(lambda x: x.count('.'))
+    tloop_df['loop_loc'] = tloop_df['TargetStruct'].apply(lambda x: x.find('.'))
+    tloop_df['tloop'] = tloop_df.apply(lambda row: row['RefSeq'][row.loop_loc - 1:row.loop_loc + row.loop_size + 1],
+                                       axis=1)
+    
+    feats = get_feature_count_matrix(tloop_df,
+                           feature_method='get_tloop_feature_list',
+                           feature_style='nupack',
+                           )
+    feats = feats[[x for x in feats.columns if x.startswith('nnn_pair#')]]
+    
+    param_dict = dict(dH='dH', dG='dG_37')
+    lr_dict = dict(dH=None, dG=None)
+    for p in param_dict:
+        lr_dict[p] = fit_param(mydata.arr_1M, mydata.data_split_dict,
+            feats=feats, param=param_dict[p], method='svd')
+        reg_out_df = feats @ (lr_dict[p].coef_df - lr_dict[p].coef_df.mean())
+        tloop_df[[param_dict[p]]] = tloop_df[[param_dict[p]]] - reg_out_df
+         
+    return tloop_df
+    
+      
 """
 def pred(val_df, lr_dict):
     result = []

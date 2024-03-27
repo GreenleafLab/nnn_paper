@@ -15,7 +15,7 @@ PNAMES = ['dH', 'Tm', 'dG_37']
 def make_model_validation_df(val_data_df, **pred_kwargs):
     """
     Args:
-        df - dataframe. Uses column names
+        val_data_df - dataframe. Uses column names
             `RefSeq` and `TargetStruct`
         **pred_kwargs - passed to `get_model_prediction`
             set `sodium='varied'` to read from df
@@ -28,7 +28,7 @@ def make_model_validation_df(val_data_df, **pred_kwargs):
     pred_columns = [c+'_pred' for c in pred_df.columns]
     pred_df.columns = pred_columns
     val_res_df = val_data_df[['RefSeq', 'TargetStruct'] + [x for x in PNAMES if x in val_data_df.columns]]
-    val_res_df[pred_columns] = pred_df.values                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                           
+    val_res_df[pred_columns] = pred_df.values.astype(float)                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                        
     return val_res_df
     
 
@@ -188,6 +188,7 @@ def run_nupack(seq_list, struct_list, sodium, model_param_file, model_kwargs):
             try:
                 DNA_conc=model_kwargs['DNA_conc']
             except:
+                print('`model_kwargs`:', model_kwargs)
                 raise ValueError("`model_kwargs` dict must have key `DNA_conc`!")
                 
             if isinstance(DNA_conc, float):

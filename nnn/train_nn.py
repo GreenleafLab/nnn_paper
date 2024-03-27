@@ -101,7 +101,8 @@ class MyData(object):
                 arr_1M['fluor_dist'] = arr_1M.TargetStruct.apply(util.get_fluor_distance_from_structure)
                 arr_1M = arr_1M.query('fluor_dist == 0')
             elif self.config['secondary_struct'] == 'target':
-                arr_1M = pd.read_csv('./data/models/processed/arr_v1_1M_n=27732.csv', index_col=0)
+                # arr_1M = pd.read_csv('./data/models/processed/arr_v1_1M_n=27732.csv', index_col=0)
+                arr_1M = pd.read_csv('./data/models/processed/arr_v0_1M_n=30872.csv', index_col=0)
         except:
             print('Using default TargetStruct arr_1M file')
             self.config['secondary_struct'] = 'target'

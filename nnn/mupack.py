@@ -6,16 +6,18 @@ from typing import List, Tuple
 from datetime import datetime
 import os
 import itertools
+from scipy.optimize import minimize
 
-from . import fileio, util, plotting
+from . import fileio, util, plotting, modeling
 
 param_name_dict = {'dH':'dH', 'dG':'dG_37'}
 
 """ Helper Functions """
 def add_2_dict_val(mydict, value):
+    newdict = mydict.copy()
     for key in mydict:
-        mydict[key] += value
-    return mydict
+        newdict[key] = mydict[key] + value
+    return newdict
     
 def get_dict_mean_val(mydict):
     return np.nanmean(list(mydict.values()))
@@ -79,7 +81,7 @@ def coef_df_2_dict(coef_df, template_dict=None,
         pclass, pname = row.name.split('#')
         coef_dict[pclass][pname] = row.values[0]
           
-    # Convet numerical keys & values to lists
+    # Convert numerical keys & values to lists
     for key, sub_dict in coef_dict.items():
         if isinstance(sub_dict, dict):
             inds = list(sub_dict.keys())
@@ -104,6 +106,7 @@ def coef_df_2_dict(coef_df, template_dict=None,
                     coef_dict[p_group] = center_new_param(old_dict=template_dict[p_group], 
                                              new_dict=coef_dict[p_group], verbose=True)
             
+        # print(coef_dict[p_group])
         new_dict = update_template_dict(template_dict, coef_dict)
     else:
         new_dict = coef_dict
@@ -220,7 +223,7 @@ def get_adjusted_triloop_terminal_penalty(hairpin_triloop_dict, terminal_penalty
         hairpin_triloop_dict[key] = value - terminal_penalty
     
     return hairpin_triloop_dict
-    
+
 def get_hpmm_from_hptetra_hptri(p_dict):
     """
     Extracts hairpin mismatch parameters from tetraloop and triloop parameters
@@ -331,7 +334,7 @@ def lr_dict_2_nupack_json(lr_dict:util.LinearRegressionSVD, template_file:str, o
                 # this only happens when individual parameters for each triloop & tetraloop were fitted
                 # semi-archived
                 mm_dict = get_hairpin_mismatch(lr_dict[p])
-                # hairpin_dict[p]['hairpin_mismatch'] = center_new_param(ori_param_set_dict[p]['hairpin_mismatch'], new_dict=mm_dict)
+                hairpin_dict[p]['hairpin_mismatch'] = center_new_param(ori_param_set_dict[p]['hairpin_mismatch'], new_dict=mm_dict)
 
             hairpin_dict[p]['hairpin_tetraloop'] = get_hairpin_seq_df(lr_dict[p], p, loop_len=4).to_dict()[p]
             hairpin_dict[p]['hairpin_triloop'] = get_hairpin_seq_df(lr_dict[p], p, loop_len=3).to_dict()[p]
@@ -378,6 +381,149 @@ def calc_hp_value(template_file, param_set_dict, p, coef_p_dict, seq, loop_size)
         hp_value -= param_set_dict[p]['terminal_penalty'][seq[-1]+seq[0]]
         
     return hp_value
+    
+def obj_fun_Tm_err_duplex(x, sampled_val_df, loop='hairpin_tetraloop', sample=None,
+                          weight=None,
+                starting_p_file = './models/dna-nnn-tloop.json',
+                tmp_p_file = './models/dna-nnn-tloop-tmp.json',):
+    """
+    Objective function to minimize for data that only has Tm
+    Args:
+        x - vector of 2, dH & dG offset
+        sampled_val_df - a small sampled val_df. Has column 'DNA_conc` and are duplexes
+        loop - 'hairpin_triloop' or 'hairpin_tetraloop' or 'interior_1_1' etc
+        sample - no more sampling is None, otherwise int for number of variants to sample
+            EACH ITERATION in contrast to using the same sampling each iteration.
+    Returns:
+        MAE of Tm calculated from json file, 
+        sampling new variants each time.
+    """
+    if weight is None:
+        weight = dict(Tm=1, dH=0.1, dG=3.2, alpha=0.1)
+    starting_p_dict = fileio.read_json(starting_p_file)
+    
+    # Add new offset from `x`
+    for i,p in enumerate(['dH', 'dG']):
+        for k,v in starting_p_dict[p][loop].items():
+            starting_p_dict[p][loop][k] = float(v + x[i])
+            
+    # Save to temporary file
+    fileio.write_json(starting_p_dict, tmp_p_file)
+    
+    # Finalize sampled data
+    if sample is not None:
+        assert isinstance(int(sample), int)
+        sampled_val_df = sampled_val_df.sample(sample)
+    
+    # for DNA_conc
+    try:
+        model_kwargs = dict(DNA_conc=sampled_val_df.DNA_conc.values)
+    except:
+        model_kwargs = dict()
+        raise '`sampled_val_df` must have column `DNA_conc`'
+        
+    # Run on sampled data
+    val_result_df = modeling.make_model_validation_df(
+        sampled_val_df,
+        model='nupack', 
+        model_param_file=tmp_p_file,
+        model_kwargs=model_kwargs
+    )
+        
+    err = weight['Tm'] * np.median(val_result_df.Tm - val_result_df.Tm_pred) + \
+        weight['alpha'] * np.array([weight['dH'], weight['dG']]) @ np.square(x)
+    # err = weight['Tm'] * util.rmse(val_result_df.Tm, val_result_df.Tm_pred) + \
+    #     weight['alpha'] * np.array([weight['dH'], weight['dG']]) @ np.square(x)
+    print(err)
+    return err
+    
+    
+def obj_fun_Tm_err(x, sampled_val_df, loop='hairpin_tetraloop', sample=None,
+                starting_p_file = './models/dna-nnn-tloop.json',
+                tmp_p_file = './models/dna-nnn-tloop-tmp.json',):
+    """
+    Objective function to minimize.
+    Args:
+        x - vector of 2, dH & dG offset
+        sampled_val_df - a small sampled val_df
+        loop - 'hairpin_triloop' or 'hairpin_tetraloop' or 'interior_1_1'
+        sample - no more sampling is None, otherwise int for number of variants to sample
+            EACH ITERATION in contrast to using the same sampling each iteration.
+    Returns:
+        MAE of Tm calculated from json file, 
+        sampling new variants each time.
+    """
+    weight = dict(Tm=5, dH=0.1, dG=3.2, alpha=0.01)
+    starting_p_dict = fileio.read_json(starting_p_file)
+    
+    # Add new offset from `x`
+    for i,p in enumerate(['dH', 'dG']):
+        for k,v in starting_p_dict[p][loop].items():
+            starting_p_dict[p][loop][k] = float(v + x[i])
+            
+    # Save to temporary file
+    fileio.write_json(starting_p_dict, tmp_p_file)
+    
+    # Finalize sampled data
+    if sample is not None:
+        assert isinstance(int(sample), int)
+        sampled_val_df = sampled_val_df.sample(sample)
+    
+    # for DNA_conc
+    if 'DNA_conc' in sampled_val_df.columns:
+        model_kwargs = dict(DNA_conc=sampled_val_df.DNA_conc.values)
+    else:
+        model_kwargs = dict()
+        
+    # Run on sampled data
+    val_result_df = modeling.make_model_validation_df(
+        sampled_val_df,
+        model='nupack', 
+        model_param_file=tmp_p_file,
+        model_kwargs=model_kwargs
+    )
+
+    for c in ['dH_pred', 'Tm_pred', 'dG_37_pred']:
+        val_result_df[c] = val_result_df[c].astype(float)
+        
+    err = (weight['Tm'] * util.rmse(val_result_df.Tm, val_result_df.Tm_pred) +
+           weight['dH'] * util.rmse(val_result_df.dH, val_result_df.dH_pred) +
+           weight['dG'] * util.rmse(val_result_df.dG_37, val_result_df.dG_37_pred))
+    # Regularization term
+    err += weight['alpha'] * np.array([weight['dH'], weight['dG']]) @ np.square(x)
+
+    return err
+    
+    
+def run_ddX_optimization(loop, val_df_dict, n_sample=50, n_run=5, dna_type='hairpin', **kwargs):
+    """
+    Args:
+        loop - str, 'hairpin_triloop' or 'hairpin_tetraloop' or 'interior_1_1'
+        dna_type - str, 'hairpin' or 'duplex'
+    """
+    def get_res_df(loss_arr, x_arr):
+        res_df = pd.DataFrame(
+            dict(loss=loss_arr,
+             ddH=x_arr[:,0],
+             ddG=x_arr[:,1]))
+        return res_df
+
+    x0 = np.array([0,0])
+    loss_arr, x_arr = np.zeros(n_run), np.zeros((n_run, 2))
+    for i in range(n_run):
+        sampled_val_df = val_df_dict[loop].sample(n_sample)
+        
+        if dna_type == 'hairpin':
+            fun = lambda x: obj_fun_Tm_err(x, sampled_val_df=sampled_val_df, loop=loop, **kwargs)
+        elif dna_type == 'duplex':
+            fun = lambda x: obj_fun_Tm_err_duplex(x, sampled_val_df=sampled_val_df, loop=loop, **kwargs)
+            
+        res = minimize(fun, x0, method='BFGS', tol=1e-1, options=dict(maxiter=20))
+        loss_arr[i] = res.fun
+        x_arr[i,:] = res.x
+
+    res_df = get_res_df(loss_arr, x_arr)
+    return res_df
 
 
 """ Plotting functions """

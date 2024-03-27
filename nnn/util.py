@@ -296,9 +296,9 @@ def pass_chi2(row):
     return row['chisq'] < cutoff
 
 def add_dG_37(df):
-    df['dG_37'] = get_dG(df['dH'], df['Tm'], t=37)
-    df['dG_37_ub'] = get_dG(df['dH_ub'], df['Tm_lb'], t=37)
-    df['dG_37_lb'] = get_dG(df['dH_lb'], df['Tm_ub'], t=37)
+    df['dG_37'] = get_dG(df['dH'], df['Tm'], celsius=37)
+    df['dG_37_ub'] = get_dG(df['dH_ub'], df['Tm_lb'], celsius=37)
+    df['dG_37_lb'] = get_dG(df['dH_lb'], df['Tm_ub'], celsius=37)
 
 def add_chisq_test(df):
     df['red_chisq'] = df.apply(get_red_chisq, axis=1)
@@ -441,7 +441,7 @@ def get_seq_structure_dG(seq, structure, celsius, sodium=1.0, param_set='dna04',
     """
     **kwargs passed to nupack.Model
     """
-    my_model = nupack.Model(material=param_set, celsius=celsius, sodium=sodium, magnesium=0.0, **kwargs)
+    my_model = nupack.Model(material=param_set, celsius=celsius, sodium=sodium, **kwargs)
     if isinstance(seq, str):
         try:
             return nupack.structure_energy([seq], structure=structure, model=my_model)
@@ -689,14 +689,16 @@ class LinearRegressionSVD(LinearRegression):
         n_feature = A.shape[1]
         n_feature_to_fit = A_unknown.shape[1]
         # x_unknown is to be solved; x_known are the known parameters
-        print(coef_df)
-        print(known_param)
+        # print(coef_df)
+        # print(known_param)
         x_known = coef_df.loc[known_param, :].values.flatten()
         if debug:
             print('x_known: ', x_known.shape)
         b_tilde = b - A_known @ x_known.reshape(-1, 1)
         
         rank_A1 = np.linalg.matrix_rank(A_unknown)
+        print('rank', rank_A1)
+        print('shape of A_unknown', A_unknown.shape)
         if rank_A1 < n_feature_to_fit:
             print('Warning: Rank of matrix A_unknown, %d, is smaller than the number of features %d!' % (rank_A1, n_feature_to_fit))
         

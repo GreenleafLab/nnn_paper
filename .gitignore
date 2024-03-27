@@ -21,6 +21,11 @@ data/models/out
 data/models/knn_out
 data/uv_melt/ECLTables
 !data/models
+data/sequencing/
+data/fitted_single_cluster/
+data/annotation/NUPACK_RNA_*.csv
+data/Fig5_model_performance.xlsx
+data/nnnlib2b_replicates_single_cluster.tsv
 
 *.wav
 *.pdf
