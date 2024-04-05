@@ -320,6 +320,7 @@ def test(config, lr_dict=None, json_file=None,
         val_result_fn = os.path.join('./models/', val_result_fn)    
         try:
             val_result_df.to_csv(val_result_fn)
+            print('val_result_df saved to %s' % val_result_fn)
         except:
             return val_result_df
     

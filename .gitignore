@@ -5,7 +5,10 @@ __pycache__/
 03.2_TrainNN.ipynb
 *_log.ipynb
 test.py
+fit_ddX.py
+val_json.py
 *.sh
+*.xlsx
 
 wandb/
 models/

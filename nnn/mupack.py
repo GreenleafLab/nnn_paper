@@ -434,11 +434,12 @@ def obj_fun_Tm_err_duplex(x, sampled_val_df, loop='hairpin_tetraloop', sample=No
         weight['alpha'] * np.array([weight['dH'], weight['dG']]) @ np.square(x)
     # err = weight['Tm'] * util.rmse(val_result_df.Tm, val_result_df.Tm_pred) + \
     #     weight['alpha'] * np.array([weight['dH'], weight['dG']]) @ np.square(x)
-    print(err)
+    # print(err)
     return err
     
     
 def obj_fun_Tm_err(x, sampled_val_df, loop='hairpin_tetraloop', sample=None,
+                   weight=None,
                 starting_p_file = './models/dna-nnn-tloop.json',
                 tmp_p_file = './models/dna-nnn-tloop-tmp.json',):
     """
@@ -447,19 +448,27 @@ def obj_fun_Tm_err(x, sampled_val_df, loop='hairpin_tetraloop', sample=None,
         x - vector of 2, dH & dG offset
         sampled_val_df - a small sampled val_df
         loop - 'hairpin_triloop' or 'hairpin_tetraloop' or 'interior_1_1'
+            or a list-like to optimize multiple at a time
         sample - no more sampling is None, otherwise int for number of variants to sample
             EACH ITERATION in contrast to using the same sampling each iteration.
     Returns:
         MAE of Tm calculated from json file, 
         sampling new variants each time.
     """
-    weight = dict(Tm=5, dH=0.1, dG=3.2, alpha=0.01)
+    # if weight is None:
+    weight = dict(Tm=4, dH=0.3, dG=3.4, alpha=0.0001)
     starting_p_dict = fileio.read_json(starting_p_file)
     
     # Add new offset from `x`
-    for i,p in enumerate(['dH', 'dG']):
-        for k,v in starting_p_dict[p][loop].items():
-            starting_p_dict[p][loop][k] = float(v + x[i])
+    if isinstance(loop, str):
+        for i,p in enumerate(['dH', 'dG']):
+            for k,v in starting_p_dict[p][loop].items():
+                starting_p_dict[p][loop][k] = float(v + x[i])
+    else:
+        for i,p in enumerate(['dH', 'dG']):
+            for l in loop:
+                for k,v in starting_p_dict[p][l].items():
+                    starting_p_dict[p][l][k] = float(v + x[i])
             
     # Save to temporary file
     fileio.write_json(starting_p_dict, tmp_p_file)
@@ -480,7 +489,8 @@ def obj_fun_Tm_err(x, sampled_val_df, loop='hairpin_tetraloop', sample=None,
         sampled_val_df,
         model='nupack', 
         model_param_file=tmp_p_file,
-        model_kwargs=model_kwargs
+        model_kwargs=model_kwargs,
+        sodium=1.0,
     )
 
     for c in ['dH_pred', 'Tm_pred', 'dG_37_pred']:
@@ -510,8 +520,13 @@ def run_ddX_optimization(loop, val_df_dict, n_sample=50, n_run=5, dna_type='hair
 
     x0 = np.array([0,0])
     loss_arr, x_arr = np.zeros(n_run), np.zeros((n_run, 2))
+    np.random.seed(42)
     for i in range(n_run):
-        sampled_val_df = val_df_dict[loop].sample(n_sample)
+        if isinstance(loop, str):
+            sampled_val_df = val_df_dict[loop].sample(n_sample)
+        else:
+            sampled_val_df = val_df_dict['hairpin'].sample(n_sample)
+            
         
         if dna_type == 'hairpin':
             fun = lambda x: obj_fun_Tm_err(x, sampled_val_df=sampled_val_df, loop=loop, **kwargs)
@@ -543,3 +558,12 @@ def plot_mupack_nupack(data, x_suffix, param, lim, color_by_density=False):
     plt.tight_layout()
 
 
+def is_modified(new_dict, old_dict, key):
+    """Only return True if the key in `new_dict` is modified
+    and needs ddX shifting
+    """
+    flag = True
+    if key in old_dict:
+        if np.allclose(new_dict[key], old_dict[key]):
+            flag = False
+    return flag
