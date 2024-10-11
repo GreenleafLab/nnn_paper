@@ -1,7 +1,6 @@
 name: nnn
 channels:
   - conda-forge
-  - defaults
 dependencies:
   - python=3.8.16
   - pip=23.0.1
@@ -32,3 +31,4 @@ dependencies:
     - sympy==1.11.1
     - levenshtein==0.21.0
     - hampel==0.0.5
+    - draw-rna==0.1.1

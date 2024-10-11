@@ -10,6 +10,7 @@ fit_ddX.py
 val_json.py
 *.sh
 *.xlsx
+*.whl
 
 wandb/
 models/
