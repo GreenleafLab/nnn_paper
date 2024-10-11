@@ -2,8 +2,9 @@ __pycache__/
 .ipynb*
 .vscode/
 
-03.2_TrainNN.ipynb
+# 03.2_TrainNN.ipynb
 *_log.ipynb
+*_log_revision.ipynb
 test.py
 fit_ddX.py
 val_json.py
@@ -17,12 +18,15 @@ fig/
 data/misc/
 data/wandb/
 data/wandb_gnn/
+data/series
 data/series_merged
 data/processed/archive
 data/models/processed/distance_mat*
 data/models/out
 data/models/knn_out
+data/models/raw/archive
 data/uv_melt/ECLTables
+data/uv_melt/UVmelting_WC68_1M/
 !data/models
 data/sequencing/
 data/fitted_single_cluster/

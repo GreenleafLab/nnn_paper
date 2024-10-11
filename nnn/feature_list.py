@@ -194,9 +194,10 @@ def get_feature_list(row, stack_size:int=2, sep_base_stack:bool=True, hairpin_mm
     pad = stack_size - 1
     
     refseq = row['RefSeq']
+    # Pad the sequence with symbols x y b ===
     if isinstance(refseq, list):
         # Duplex
-        # Placeholder 'b' for strandbreak because RGV is stupid and have trouble
+        # Placeholder 'b' for strandbreak because RGV has trouble
         # handling multiple strands
         seq = 'x'*pad + refseq[0] + 'y'*pad + 'b' + 'x'*pad + refseq[1] + 'y'*pad
         struct = '('*pad + row['TargetStruct'].replace('+', '('*pad + '.' + ')'*pad) + ')'*pad
@@ -206,6 +207,7 @@ def get_feature_list(row, stack_size:int=2, sep_base_stack:bool=True, hairpin_mm
         seq = 'x'*pad+refseq+'y'*pad
         struct = '('*pad+row['TargetStruct']+')'*pad # has one more stack at the end
     
+    # Extract loops and stacks, then format ===
     loops = LoopExtruder(seq, struct, neighbor_bps=loop_base_size)
     stacks = StackExtruder(seq, struct, stack_size=stack_size)
     loops_cleaned = [clean(x) for x in loops if not ('b' in x)] # remove anything with strand break
@@ -220,8 +222,10 @@ def get_feature_list(row, stack_size:int=2, sep_base_stack:bool=True, hairpin_mm
                 hairpin_stack = StackExtruder(seq, struct, stack_size=1)[0]
                 
                 if len(seq) <= 6:
+                    # for tetraloops and shorter
                     loops_cleaned.append(clean(hairpin_loop))
                 else:
+                    # one single parameter for hairpins longer than tetraloop
                     loops_cleaned.append('NNNNN_.....')
                                    
                 if hairpin_mm:
@@ -230,7 +234,6 @@ def get_feature_list(row, stack_size:int=2, sep_base_stack:bool=True, hairpin_mm
                     
                 if not ignore_base_stack:
                     loops_cleaned.append(clean(hairpin_stack))
-                    
                 
                 loops_cleaned.remove(loop)
                     
@@ -363,6 +366,7 @@ def get_nupack_feature_list(row, fit_intercept:bool=False,
                 feature_list.append('interior_size%s%d' % (sep, interior_size))
                 # no asymmetric constructs in the library
                 # therefore ignoring the interior assymm parameter
+                # the two interior_mismatch parameters
                 mm1 = seq2[-2:] + seq1[:2]
                 mm2 = seq1[-2:] + seq2[:2]
                 

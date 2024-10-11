@@ -446,7 +446,7 @@ def get_seq_structure_dG(seq, structure, celsius, sodium=1.0, param_set='dna04',
         try:
             return nupack.structure_energy([seq], structure=structure, model=my_model)
         except:
-            print(seq, structure, sodium)
+            print('Error calculating:',seq, structure, sodium)
     else:
         return nupack.structure_energy(seq, structure=structure, model=my_model)
 

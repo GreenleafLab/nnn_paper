@@ -3,20 +3,20 @@ channels:
   - conda-forge
   - defaults
 dependencies:
-  - python=3.8
-  - pip
+  - python=3.8.18
+  - pip=23.3
   - jupyterlab
-  - numpy
-  - pandas
-  - matplotlib
-  - seaborn
-  - scipy
-  - joblib
-  - statsmodels
-  - pandarallel
-  - scikit-learn
-  - wandb
+  - numpy=1.24.4
+  - pandas=2.0.3
+  - matplotlib=3.7.3
+  - seaborn=0.13.0
+  - scipy=1.10.1
+  - joblib=1.3.2
+  - statsmodels=0.14.0
+  - pandarallel=1.6.5
+  - scikit-learn=1.3.1
+  - wandb=0.15.12
   - pip:
-    - tqdm
-    - networkx
+    - tqdm=4.66.1
+    - networkx=3.1
 # install nupack, draw_rna, RiboVizGraph manually from file

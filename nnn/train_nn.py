@@ -121,6 +121,7 @@ def train(config):
     Logs training error
     Returns `lr_dict`
     """
+    wandb.init()
     mydata = MyData(config)
     
     ### Extract Features ###
@@ -275,6 +276,7 @@ def test(config, lr_dict=None, json_file=None,
                     model_kwargs={'DNA_conc': val_df['DNA_conc'].values}
                 )
             else:
+                # val_kwargs = dict(model_kwargs={'ensemble':True})
                 val_kwargs = dict()
             
             # Actually run

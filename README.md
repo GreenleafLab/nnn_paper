@@ -25,7 +25,7 @@ Three major conda environments were used:
       
 Packages `draw_rna` and `RiboGraphViz` were installed from file as directed on Das lab github repositories https://github.com/DasLab/draw_rna and https://github.com/DasLab/RiboGraphViz.
 
-NUPACK4 was also manually installed from file as it requires a free liscence for download (https://docs.nupack.org/).
+NUPACK4 (v4.0.0.27) was also manually installed from file as it requires a free liscence for download (https://docs.nupack.org/).
     
 ## Scripts for Library design
 

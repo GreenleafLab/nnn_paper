@@ -38,8 +38,8 @@ class ArrayData(object):
         lib_name - str, 'nnn_lib2b'
         n_rep - int
         buffer - Dict[str: value], {'sodium': float, in M}
-        data_all - df, all shitty columns
-        data - df, just the clean combined parameters
+        data_all - df, all columns
+        data - df, clean columns, just the clean combined parameters
         curve - dict of pd.DataFrame, keys are replicate,
                 levels are variant-replicate-median/se-temperature. 
                 Green normed data.
@@ -53,6 +53,7 @@ class ArrayData(object):
     """
     def __init__(self, replicate_df, annotation_file, name='',
                  lib_name='NNNlib2b', filter_misfold: bool=False,
+                 excluded_construct_type=None, 
                  learn_error_adjust_from: Tuple[str]=None, error_adjust: ErrorAdjust=None ) -> None:
         """
         Args:
@@ -210,6 +211,7 @@ class ArrayData(object):
                          myfilter:str="dH_err_rel < 0.2 & Tm_err_abs < 2 & redchi < 1.5 & n_inlier > 10") -> pd.DataFrame:
         """
         Load the line fit files for a df with replicate level information
+        Called by `filter_two_state`
         """
         if (not hasattr(self, 'two_state_df')) or force_recalculate:
             line_fit = []
@@ -234,7 +236,7 @@ class ArrayData(object):
         
     def filter_two_state(self, min_rep_pass:int=2, force_recalculate:bool=False, overwrite_dH:bool=False,
                          myfilter:str="dH_err_rel < 0.2 & Tm_err_abs < 2 & redchi < 1.5 & n_inlier > 10",
-                         inplace=False):
+                         inplace=False, plot_fig=True):
         """
         Judge final two state behavior based on the replicate level information
         Args:
@@ -250,33 +252,35 @@ class ArrayData(object):
         
         self.accounting_df.loc['passed2state', :] = pass_df.query('two_state').join(self.annotation).groupby('Series').apply(len)
         
-        fig, ax = plt.subplots()
-        sns.histplot(two_state_df[n_pass >= min_rep_pass]['r1','dH_err_rel'].dropna(), 
-                    bins=np.arange(0,1,0.02), alpha=.3,# stat='density',
-                    color='g')
-        sns.histplot(two_state_df[n_pass < min_rep_pass]['r1','dH_err_rel'].dropna(), 
-                    bins=np.arange(0,1,0.02), alpha=.3,# stat='density',
-                    color='r')
-        plt.legend(['pass', 'not pass'])
+        if plot_fig:
+            fig, ax = plt.subplots()
+            sns.histplot(two_state_df[n_pass >= min_rep_pass]['r1','dH_err_rel'].dropna(), 
+                        bins=np.arange(0,1,0.02), alpha=.3,# stat='density',
+                        color='g')
+            sns.histplot(two_state_df[n_pass < min_rep_pass]['r1','dH_err_rel'].dropna(), 
+                        bins=np.arange(0,1,0.02), alpha=.3,# stat='density',
+                        color='r')
+            plt.legend(['pass', 'not pass'])
 
-        plt.title('%.2f%% variants pass the two state filter' % (np.sum(n_pass >= min_rep_pass) / len(n_pass) * 100))
-        plt.show()
+            plt.title('%.2f%% variants pass the two state filter' % (np.sum(n_pass >= min_rep_pass) / len(n_pass) * 100))
+            plt.show()
             
         # use the dH from line fitting for reduced uncertainty
         dH_line, dH_se_line = processing.get_combined_param(
                 self.two_state_df.xs('dH_line', axis=1, level=1),
                 self.two_state_df.xs('dH_se_line', axis=1, level=1))
 
-        fig, ax = plt.subplots(1, 2, figsize=(6,2))
-        histargs = dict(bins=np.arange(0,10,.2), kde=False, ax=ax[0])
-        sns.histplot(dH_se_line,color='cornflowerblue', label='line fit', **histargs)
-        sns.histplot(self.data['dH_se'], color='c',label='curve fit', **histargs)
- 
-        histargs = dict(bins=np.arange(-60,0,1), kde=False, ax=ax[1])
-        sns.histplot(dH_line,color='cornflowerblue', label='line fit', **histargs)
-        sns.histplot(self.data['dH'], color='c',label='curve fit', **histargs)
-        plt.legend()
-        plt.show()
+        if plot_fig:
+            fig, ax = plt.subplots(1, 2, figsize=(6,2))
+            histargs = dict(bins=np.arange(0,10,.2), kde=False, ax=ax[0])
+            sns.histplot(dH_se_line,color='cornflowerblue', label='line fit', **histargs)
+            sns.histplot(self.data['dH_se'], color='c',label='curve fit', **histargs)
+    
+            histargs = dict(bins=np.arange(-60,0,1), kde=False, ax=ax[1])
+            sns.histplot(dH_line,color='cornflowerblue', label='line fit', **histargs)
+            sns.histplot(self.data['dH'], color='c',label='curve fit', **histargs)
+            plt.legend()
+            plt.show()
         if overwrite_dH:
             suffix = ''
         else:

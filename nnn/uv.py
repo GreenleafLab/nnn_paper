@@ -666,8 +666,20 @@ def agg_fit_result(uvmelt_result_file, agg_result_file, sample_sheet_file,
     else:
         result_df = pd.read_csv(uvmelt_result_file, index_col=0)
         result_df['pass_qc'] = result_df.eval(single_curve_qc_criteria)
+        
+        # Plot single curve QC filter and print numbers
+        print(f'\n{np.sum(result_df.pass_qc)} / {result_df.shape[0]} single curves passed QC\n\n')
+        fig, ax = plt.subplots(figsize=(2,2))
+        sns.scatterplot(data=result_df.query('dH_std < 1e2 & Tm_std < 50 & dH < 0'), 
+                        x='dH_std', y='Tm_std', hue='pass_qc', alpha=1, edgecolor='k', size=5, 
+                        style='pass_qc', markers=['X', 'D'], ax=ax)
+        plt.xscale('log')
+        plt.yscale('log')
+        plt.title('Individual curve QC')
+        ax.get_legend().remove()
+        beutify(ax, shrink=True, do_not_resize=True)
+        
         result_df = result_df.query('pass_qc')
-        sns.scatterplot(data=result_df.query('dH_std < 1e2 & Tm_std < 50 & dH < 0'), x='dH_std', y='Tm_std', hue='pass_qc')
             
     if only_use_cooling:
         result_df['isCooling'] = result_df.curve_name.apply(lambda x: 'Cooling' in x)
@@ -703,16 +715,24 @@ def agg_fit_result(uvmelt_result_file, agg_result_file, sample_sheet_file,
         result_agg_df[col] = lookup_sample_df(result_agg_df, sample_sheet, col)
         
     qc_criterion = 'Tm_uv_std < %f & dH_uv_std < %f' % (Tm_std_thresh, dH_std_thresh)
-    fig, ax = plt.subplots(1, 2, figsize=(8,4))
+    
+    fig, ax = plt.subplots(1, 2, figsize=(4,2))
     sns.scatterplot(data=result_agg_df,
-                    x='dH_uv_std', y='Tm_uv_std', hue='n_curve',
-                    palette='plasma', ax=ax[0])
+                    x='dH_uv_std', y='Tm_uv_std', size='n_curve', hue=result_agg_df.eval(qc_criterion),
+                    palette='Set2', edgecolor='k', ax=ax[0])
+    ax[0].set_xscale('log')
+    ax[0].set_yscale('log')
+    ax[0].set_title('Errors of the samples')
     ax[0].axhline(Tm_std_thresh, linestyle='--', c='gray')
     ax[0].axvline(dH_std_thresh, linestyle='--', c='gray')
-    ax[0].set_title('%.2f%% (%d / %d) variants passed QC' % 
+    ax[0].set_title('%.2f%% (%d / %d) samples passed QC' % 
                  (100 * result_agg_df.eval(qc_criterion).sum() / len(result_agg_df), result_agg_df.eval(qc_criterion).sum(), len(result_agg_df)))
+
     sns.scatterplot(data=result_df.query('dH_std < 1e2 & Tm_std <20'), x='dH_std', y='Tm_std', hue='rmse', ax=ax[1])
-    ax[1].set_title('single curves used')
+    ax[1].set_title('QC of individual curves used')
+    plt.xscale('log')
+    plt.yscale('log')
+    beutify_all_ax(ax, shrink=True, do_not_resize=True)
     sns.despine()
     save_fig(agg_result_file.replace('.csv', '.pdf'), fig)
     
