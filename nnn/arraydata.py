@@ -165,7 +165,7 @@ class ArrayData(object):
         return data, curves, curves_se, p_unfold
 
 
-    def get_replicate_data(self, replicate_name: str, attach_annotation: bool = False, verbose=True) -> pd.DataFrame:
+    def get_replicate_data(self, replicate_name: str, attach_annotation: bool = False, verbose=False) -> pd.DataFrame:
         """
         Lower level, returns the original df of fitted variant data
         Compatible with older functions
@@ -238,7 +238,7 @@ class ArrayData(object):
                          myfilter:str="dH_err_rel < 0.2 & Tm_err_abs < 2 & redchi < 1.5 & n_inlier > 10",
                          inplace=False, plot_fig=True):
         """
-        Judge final two state behavior based on the replicate level information
+        Judge final two state behavior of variants based on the replicate level information
         Args:
             overwrite_dH - bool, overwrite the curve fitting dH with line fitting dH
                 otherwise use column name 'dH_line'
@@ -302,6 +302,10 @@ class ArrayData(object):
         self.data['dH_se'+suffix] = self.data['dH_se'+suffix].fillna(dH_se)
 
         if inplace:
+            n_pass = np.sum(self.data.two_state)
+            n_tot = self.data.shape[0]
+            print('\n%d/%d (%.2f%%) variants passed the two state criteria.' %
+                  (n_pass, n_tot, n_pass / n_tot * 100))
             self.data = self.data.query('two_state == 1')
             
         return pass_df

@@ -219,9 +219,10 @@ def convert_santalucia_motif_representation(motif):
 
 
 
-def filter_variant_table(df, variant_filter):
+def filter_variant_table(df, variant_filter, verbose=True):
     filtered_df = df.query(variant_filter)
-    print('%.2f%% variants passed the filter %s' % (100 * len(filtered_df) / len(df), variant_filter))
+    if verbose:
+        print('%.2f%% variants passed the filter %s' % (100 * len(filtered_df) / len(df), variant_filter))
     return filtered_df
 
 
@@ -229,7 +230,7 @@ def get_GC_content(seq):
     return 100 * np.sum([s in ['G','C'] for s in str(seq)]) / len(str(seq))
 
 
-def get_Na_adjusted_Tm(Tm, dH, GC, Na=0.088, from_Na=1.0):
+def get_Na_adjusted_Tm(Tm, dH, GC, Na=0.063, from_Na=1.0):
     # Tmadj = Tm + (-3.22*GC/100 + 6.39)*(np.log(Na/from_Na))
     Tmadj_inv = (1 / (Tm + 273.15) + (4.29 * GC/100 - 3.95) * 1e-5 * np.log(Na / from_Na)
         + 9.4 * 1e-6 * (np.log(Na)**2 - np.log(from_Na)**2))
@@ -265,15 +266,15 @@ def get_dS_err(dH, dH_err, Tm, Tm_err):
     dS = get_dS(dH, Tm)
     return  - dS * np.sqrt((dH_err / dH)**2 + (Tm_err / (Tm + 273.15))**2)
     
-def get_Na_adjusted_dG(Tm, dH, GC, celsius, Na=0.088, from_Na=1.0):
+def get_Na_adjusted_dG(Tm, dH, GC, celsius, Na=0.063, from_Na=1.0):
     Tm_adjusted = get_Na_adjusted_Tm(Tm, dH, GC, Na, from_Na)
     return get_dG(dH, Tm_adjusted, celsius)
     
-def get_Na_adjusted_dG_37(Tm, dH, GC, Na=0.088, from_Na=1.0):
+def get_Na_adjusted_dG_37(Tm, dH, GC, Na=0.063, from_Na=1.0):
     Tm_adjusted = get_Na_adjusted_Tm(Tm, dH, GC, Na, from_Na)
     return get_dG(dH, Tm_adjusted, 37)
 
-def get_Na_adjusted_param(Na=1.0, from_Na=0.088, **data_dict):
+def get_Na_adjusted_param(Na=1.0, from_Na=0.063, **data_dict):
     """
     data_dict - dict, with keys dH, Tm, and seq
     """

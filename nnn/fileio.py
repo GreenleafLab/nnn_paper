@@ -37,7 +37,7 @@ def read_santalucia_df(santalucia_file):
     return santa_lucia
 
 def read_fitted_variant(filename, filter=True, annotation=None,
-                        add_chisq_test=True, sodium=0.075):
+                        add_chisq_test=True, sodium=0.063, verbose=True):
     """
     Overwrites salt correction in the annotation df with sodium conc
     Args:
@@ -68,7 +68,7 @@ def read_fitted_variant(filename, filter=True, annotation=None,
     # Filter variants
     if filter:
         variant_filter = "n_clusters > 5 & dG_37_se < 2 & Tm_se < 25 & dH_se < 25 & RMSE < 0.5"
-        df = util.filter_variant_table(df, variant_filter)
+        df = util.filter_variant_table(df, variant_filter, verbose=verbose)
 
     # Optionally join annotation
     if annotation is not None:
@@ -241,7 +241,7 @@ def read_val_df(split='val', datadir='./data'):
     center_split_dict = read_json(join_path('models/raw/data_split_Oliveira.json'))
     oligo_split_dict = read_json(join_path('models/raw/data_split_348oligos.json'))
     
-    arr_df['sodium'] = 0.088
+    arr_df['sodium'] = 0.063
     
     if split == 'all':
         val_df = pd.concat(
