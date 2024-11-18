@@ -27,6 +27,8 @@ Three major conda environments were used:
       
 To install, make sure `conda` is already installed, then run `conda create -f {path/to/yml/file/name}`. For example, `conda create -f envs/nnn.yml`.
 
+The local conda environment `nnn` is also directly exported to `envs/nnn_environment.yml`. It is provide for record keeping, and `envs/nnn.yml` is still recommended for installing from scratch.
+
 ### RiboGraphViz
 
 Package `RiboGraphViz` needs to be installed from cloned github repository, as directed at https://github.com/DasLab/RiboGraphViz. 

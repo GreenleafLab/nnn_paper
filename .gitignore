@@ -1,7 +1,8 @@
 __pycache__/
 .ipynb*
 .vscode/
-
+.DS_Store
+*/.DS_Store
 # 03.2_TrainNN.ipynb
 *_log.ipynb
 *_log_revision.ipynb
