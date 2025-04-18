@@ -37,14 +37,14 @@ class MyData(object):
         
     def load_everything(self):
         # Array
-        self.arr = pd.read_csv('./data/models/raw/arr_v1_n=27732.csv', index_col=0)
-        self.arr_adj = pd.read_csv('./data/models/processed/arr_v1_adjusted_n=27732.csv', index_col=0)
+        self.arr = pd.read_csv('./data/models/raw/arr_v1_n=27730.csv', index_col=0)
+        self.arr_adj = pd.read_csv('./data/models/processed/arr_v1_adjusted_n=27730.csv', index_col=0)
 
         # UV melt
-        agg_result_file='./data/uv_melt/uvmelt_agg_230901.csv'
+        agg_result_file='./data/uv_melt/uvmelt_agg.csv'
         self.uv_df = pd.read_csv(agg_result_file, index_col=0).set_index('SEQID')
         self.uv_df.columns = [x.replace('_uv', '') for x in self.uv_df.columns]
-        self.ecl_oligo_df = pd.read_csv('./data/uv_melt/ECLTables/ECLOligos230502.csv', index_col=0)    
+        self.ecl_oligo_df = pd.read_csv('./data/uv_melt/ECLTables/ECLOligos.csv', index_col=0)    
 
         # Literature
         # SL parameters
@@ -58,7 +58,8 @@ class MyData(object):
         self.lit_uv_data_split = fileio.read_json('./data/models/raw/data_split_348oligos.json')
 
         # Annotation
-        self.annotation = pd.read_table('./data/annotation/NNNlib2b_annotation_20220519.tsv', index_col=0)
+        self.annotation = pd.read_table(
+            './data/annotation/NNNlib2b_annotation_2024_duplicates_dropped.tsv', index_col=0)
         
     @staticmethod
     def get_df_by_split(df, data_split_dict, data_split:str):
@@ -101,12 +102,11 @@ class MyData(object):
                 arr_1M['fluor_dist'] = arr_1M.TargetStruct.apply(util.get_fluor_distance_from_structure)
                 arr_1M = arr_1M.query('fluor_dist == 0')
             elif self.config['secondary_struct'] == 'target':
-                # arr_1M = pd.read_csv('./data/models/processed/arr_v1_1M_n=27732.csv', index_col=0)
-                arr_1M = pd.read_csv('./data/models/processed/arr_v0_1M_n=30872.csv', index_col=0)
+                arr_1M = pd.read_csv('./data/models/processed/arr_v1_1M_n=27730.csv', index_col=0)
         except:
             print('Using default TargetStruct arr_1M file')
             self.config['secondary_struct'] = 'target'
-            arr_1M = pd.read_csv('./data/models/processed/arr_v1_1M_n=27732.csv', index_col=0)
+            arr_1M = pd.read_csv('./data/models/processed/arr_v1_1M_n=27730.csv', index_col=0)
         
         return arr_1M
         
