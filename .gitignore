@@ -36,8 +36,8 @@ data/uv_melt/UVmelting_WC68_1M/
 !data/models
 data/sequencing/
 data/fitted_single_cluster/
-data/fitted_variant/
-!data/fitted_variant/arr.csv
+data/fitted_variant/dG_fit*
+data/fitted_variant/NNNlib2_*
 data/literature/SantaLucia_flipped.csv
 data/literature/SantaLucia_full.csv
 data/annotation/NUPACK_RNA_*.csv
