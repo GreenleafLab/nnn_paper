@@ -341,6 +341,9 @@ def get_variances(y, sigma, y_hat,
                   verbose=True):
     """
     Args:
+        y - data
+        sigma - error in data
+        y_hat - prediction
         sigma_model - LinearRegression, if None fit afresh
     """
     n = len(y)
