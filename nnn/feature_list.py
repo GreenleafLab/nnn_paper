@@ -7,7 +7,7 @@ import re
 
 from RiboGraphViz import RGV
 from RiboGraphViz import LoopExtruder, StackExtruder
-from ipynb.draw import draw_struct
+from draw_rna.ipynb_draw import draw_struct
 from nnn import util
 
 ##### Helper Functions #####

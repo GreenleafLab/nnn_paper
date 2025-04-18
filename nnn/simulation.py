@@ -7,7 +7,7 @@ import seaborn as sns
 # from sklearn import ensemble
 sns.set_style('ticks')
 sns.set_context('paper')
-from ipynb.draw import draw_struct
+from draw_rna.ipynb_draw import draw_struct
 import nupack
 from matplotlib.backends.backend_pdf import PdfPages
 from joblib import Parallel, delayed

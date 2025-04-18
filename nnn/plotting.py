@@ -5,7 +5,7 @@ import os, json
 import seaborn as sns
 from scipy.stats import chi2, pearsonr, norm
 # from sklearn.metrics import r2_score
-from ipynb.draw import draw_struct
+from draw_rna.ipynb_draw import draw_struct
 import matplotlib.patches as patches
 from matplotlib.path import Path
 import matplotlib.cm as cm

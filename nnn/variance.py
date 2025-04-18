@@ -8,7 +8,7 @@ from sklearn.linear_model import LinearRegression
 from . import util
 import re
 
-from ipynb.draw import draw_struct
+from draw_rna.ipynb_draw import draw_struct
 
 def find_mm_parent(seq, struct, arr, which_side='both'):
     def get_parent_candidates(seq, struct):

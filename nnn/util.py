@@ -24,7 +24,7 @@ from scipy.stats import chi2, pearsonr, norm
 from scipy import optimize as opt
 from sklearn.preprocessing import MaxAbsScaler
 
-# from ipynb.draw import draw_struct
+from draw_rna.ipynb_draw import draw_struct
 import nupack
 from matplotlib.backends.backend_pdf import PdfPages
 # from arnie.free_energy import free_energy

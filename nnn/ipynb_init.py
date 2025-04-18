@@ -12,7 +12,7 @@ import json, os, pickle
 from collections import defaultdict
 from RiboGraphViz import RGV
 from RiboGraphViz import LoopExtruder, StackExtruder
-from ipynb.draw import draw_struct
+from draw_rna.ipynb_draw import draw_struct
 import nupack
 import sklearn
 from scipy import stats
