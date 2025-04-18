@@ -13,6 +13,7 @@ val_json.py
 *.xlsx
 *.whl
 01.6_Revision.ipynb
+02.1_UV_melt.ipynb
 
 wandb/
 models/
