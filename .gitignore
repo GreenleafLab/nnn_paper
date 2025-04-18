@@ -12,6 +12,7 @@ val_json.py
 *.sh
 *.xlsx
 *.whl
+01.6_Revision.ipynb
 
 wandb/
 models/
