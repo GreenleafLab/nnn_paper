@@ -25,7 +25,7 @@ Three major conda environments were used:
     - `nn_train.yml` for fitting and running linear regression models.
       Also available as a singularity container as defined in `nn_train.def`.
       
-To install, make sure `conda` is already installed, then run `conda create -f {path/to/yml/file/name}`. For example, `conda create -f envs/nnn.yml`.
+To install, make sure `conda` is already installed, then run `conda create -f {path/to/yml/file/name}`. For example, `conda env create -f envs/nnn.yml`.
 
 ### RiboGraphViz
 
@@ -41,6 +41,23 @@ NUPACK4 (v4.0.0.27) was manually installed from file as it requires a free lisce
 4. Choose one of the four `cp38` wheel files depending on your operating system. For example, `nupack-4.0.0.28-cp38-cp38-macosx_10_13_x86_64.whl` on macos.
 5. Run `conda activate nnn` to activate the `nnn` environment.
 6. Run `pip install {path/to/your/nupack/whl/file}` to install the NUPACK python module.
+
+## Running linear regression models
+
+The parameter estimation process could be replicated by following these steps:
+
+1.	**Prepare the environment.** Install the conda environment specified in `envs/nn_train.yml` with `conda env create -f envs/nn_train.yml`. This yaml file specifies the required packages and their versions.
+
+    a.	Alternatively, use a singularity container. The build file of this singularity container is `envs/nn_train.def`.
+2.	**Activate the environment.** `conda activate nn_train`
+
+3.	**Run the script.** Enter `python run_nn_train.py` in the command line. You may also submit it as a job, using `run_nn_train.sh` as a template (you will need to modify the slurm settings). 
+In `run_nn_train.py`, edit the `config` dictionary to run models with different settings; edit the `myrange` list to change the percentage of training data used for the plots.
+
+    a.	Alternatively, run the notebook interactively. Launch `jupyter lab` and run the notebook `03.2_TrainNN.ipynb` in the `nnn_paper` repository.
+    
+    b.	Note that in either script or notebook settings, you will be prompted to login to `wandb` to log the model training runs. This helps to keep track of models trained with different settings.
+
     
 ## Scripts for Library design
 
