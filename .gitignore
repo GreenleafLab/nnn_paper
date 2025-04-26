@@ -12,6 +12,7 @@ val_json.py
 *.sh
 *.xlsx
 *.whl
+01.0_DataPrep.ipynb
 01.6_Revision.ipynb
 02.1_UV_melt.ipynb
 

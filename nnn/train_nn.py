@@ -37,8 +37,8 @@ class MyData(object):
         
     def load_everything(self):
         # Array
-        self.arr = pd.read_csv('./data/models/raw/arr_v1_n=27730.csv', index_col=0)
-        self.arr_adj = pd.read_csv('./data/models/processed/arr_v1_adjusted_n=27730.csv', index_col=0)
+        self.arr = pd.read_csv('./data/models/raw/arr_v1_n=27732.csv', index_col=0)
+        self.arr_adj = pd.read_csv('./data/models/processed/arr_v1_adjusted_n=27732.csv', index_col=0)
 
         # UV melt
         agg_result_file='./data/uv_melt/uvmelt_agg.csv'
