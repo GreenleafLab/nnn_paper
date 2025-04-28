@@ -231,7 +231,7 @@ def read_val_df(split='val', datadir='./data'):
     """
     join_path = lambda x: os.path.join(datadir, x)
     
-    arr_df = pd.read_csv(join_path('models/processed/arr_v1_adjusted_n=27730.csv'), index_col=0)
+    arr_df = pd.read_csv(join_path('models/processed/arr_v1_adjusted_n=27732.csv'), index_col=0)
     uv_df = pd.read_csv(join_path('models/raw/uv_n=19.csv'), index_col=0) # All validation no test
     center_df = read_Oliveira_df(join_path('literature/Oliveira_2020_mismatches.csv'))
     oligos348_df = pd.read_csv(join_path('literature/compiled_DNA_Tm_348oligos.csv'), index_col=0)

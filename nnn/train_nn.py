@@ -106,7 +106,7 @@ class MyData(object):
         except:
             print('Using default TargetStruct arr_1M file')
             self.config['secondary_struct'] = 'target'
-            arr_1M = pd.read_csv('./data/models/processed/arr_v1_1M_n=27730.csv', index_col=0)
+            arr_1M = pd.read_csv('./data/models/processed/arr_v1_1M_n=27732.csv', index_col=0)
         
         return arr_1M
         
